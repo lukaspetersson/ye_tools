@@ -6,39 +6,8 @@ import numpy as np
 import os
 import time
 
-'''
-a = 0.5 = 1/16
-b = 1 = 1/8
-c = 1.5 = 3/16
-d = 2 = 1/4
-e = 3 = 3/8
-f = 4 = 1/2
-g = 8 = 1
-'''
-beats = []
-file = open("takt.txt")
-for line in file:
-    for note in line.split():
-        note = float(note)
-        if note == 0.5:
-            beats.append('a')
-        elif note == 1:
-            beats.append('b')
-        elif note == 1.5:
-            beats.append('c')
-        elif note == 2:
-            beats.append('d')
-        elif note == 3:
-            beats.append('e')
-        elif note == 4:
-            beats.append('f')
-        elif note == 8:
-            beats.append('g')
 
-from collections import Counter
-print(Counter(beats))
-
-text = "".join(beats)
+text = open("takt_string.txt", 'rb').read().decode(encoding='utf-8')
 
 #create the alphabet
 vocab = sorted(set(text))
@@ -64,7 +33,7 @@ def split_input_target(sequence):
     return input_text, target_text
 
 dataset = seqs.map(split_input_target)
-BATCH_SIZE = 64
+BATCH_SIZE = 7
 BUFFER_SIZE = 10000
 dataset = (
     dataset
@@ -110,30 +79,16 @@ checkpoint_dir = './training_checkpoints'
 # Name of the checkpoint files
 checkpoint_prefix = os.path.join(checkpoint_dir, "ckpt_{epoch}")
 
-checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
-    filepath=checkpoint_prefix,
-    save_weights_only=True)
-EPOCHS = 20
-history = model.fit(dataset, epochs=EPOCHS, callbacks=[checkpoint_callback])
+loss= model.evaluate(dataset)
+if 1 == 2:
+    checkpoint_callback = tf.keras.callbacks.ModelCheckpoint(
+        filepath=checkpoint_prefix,
+        save_weights_only=True)
+    EPOCHS = 20
+    history = model.fit(dataset, epochs=EPOCHS, callbacks=[checkpoint_callback])
+else:
+    latest = tf.train.latest_checkpoint(checkpoint_dir)
+    model.load_weights(latest)
 
-exit()
-tf.autograph.set_verbosity(1)
-
-print("hhhhhhhhhhhh")
-print(dataset)
-print(dataset.take(1))
-a, b = dataset.element_spec
-print(a)
-print(b)
-
-for a , b in dataset.take(1):
-    print("hhhhklkj")
-    print(a)
-
-exit()
-print("HHHdshfsklHHHHHHHHHHHHhhh:")
-for input_example_batch, target_example_batch in dataset.take(1):
-    print("HHHHHHHHHHHHHHHhhh:")
-    example_batch_predictions = model(input_example_batch)
-    print(example_batch_predictions.shape, "# (batch_size, sequence_length, vocab_size)")
+loss= model.evaluate(dataset)
 

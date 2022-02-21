@@ -135,3 +135,4 @@ dmypy.json
 *.py~
 *.un~
 songs/
+training_checkpoints/
