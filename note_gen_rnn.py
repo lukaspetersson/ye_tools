@@ -137,13 +137,62 @@ class OneStep(tf.keras.Model):
 
 one_step_model = OneStep(model, chars_from_ids, ids_from_chars)
 
+def char_to_abc(c):
+    if c == 'a':
+        return "/2"
+    elif c == 'b':
+        return "1"
+    elif c == 'c':
+        return "1.5"
+    elif c == 'd':
+        return "2"
+    elif c == 'e':
+        return "3"
+    elif c == 'f':
+        return "4"
+    elif c == 'g':
+        return "8"
+    return ""
+
+def char_to_val(c):
+    if c == 'a':
+        return 0.5
+    elif c == 'b':
+        return 1
+    elif c == 'c':
+        return 1.5
+    elif c == 'd':
+        return 2
+    elif c == 'e':
+        return 3
+    elif c == 'f':
+        return 4
+    elif c == 'g':
+        return 8
+    return 0
+
+
 states = None
 next_char = tf.constant(['bbaab'])
 result = [next_char]
-for n in range(100):
-  next_char, states = one_step_model.generate_one_step(next_char, states=states)
-  result.append(next_char)
-result = tf.strings.join(result)
-print(result[0].numpy().decode('utf-8'))
+song = "|"
+for _ in range(15):
+    measure = []
+    while True:
+        next_char, states = one_step_model.generate_one_step(next_char, states=states)
+        c = tf.strings.join([next_char])[0].numpy().decode("utf-8")
+        s = sum([char_to_val(c) for c in measure]) + char_to_val(c) 
+        if s < 8:
+            measure.append(c)
+        if s == 8:
+            break
+    for b in measure:
+        song += ("*"+char_to_abc(b))
+    song += "|"
+
+        
+f = open("gen_takt.txt", "w")
+f.write(song)
+f.close()
 
 
