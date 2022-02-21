@@ -30,6 +30,31 @@ def write_takt(songs):
             msg += str(num)
             msg += " "
         msg += "\n"
+        msg += "\n"
+    f.write(msg)
+    f.close()
+
+def write_takt_string(songs):
+    f = open("takt_string.txt", "w")
+    msg = ""
+    for song in songs:
+        for note in song:
+            if note == 0.5:
+                msg += 'a'
+            elif note == 1:
+                msg += 'b'
+            elif note == 1.5:
+                msg += 'c'
+            elif note == 2:
+                msg += 'd'
+            elif note == 3:
+                msg += 'e'
+            elif note == 4:
+                msg += 'f'
+            elif note == 8:
+                msg += 'g'
+        msg += '\n'
+        msg += '\n'
     f.write(msg)
     f.close()
 
@@ -39,4 +64,4 @@ for song_file_name in os.listdir("songs"):
     song = mido.MidiFile(os.path.join("songs",song_file_name))
     songs.append(get_takt_easy(song))
 
-write_takt(songs)
+write_takt_string(songs)
