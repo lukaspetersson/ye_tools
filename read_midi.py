@@ -22,15 +22,21 @@ def get_takt_easy(file):
                         takt.append(cand*2)
     return takt
 
-def write_takt(arr):
+def write_takt(songs):
     f = open("takt.txt", "w")
     msg = ""
-    for num in arr:
-        msg += str(num)
-        msg += " "
+    for song in songs:
+        for num in song:
+            msg += str(num)
+            msg += " "
+        msg += "\n"
     f.write(msg)
     f.close()
 
+import os
+songs = []
+for song_file_name in os.listdir("songs"):
+    song = mido.MidiFile(os.path.join("songs",song_file_name))
+    songs.append(get_takt_easy(song))
 
-mid = mido.MidiFile('songs/Pärongrisen_fa1d70.mid')
-write_takt(get_takt_easy(mid))
+write_takt(songs)
