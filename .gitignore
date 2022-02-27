@@ -134,5 +134,5 @@ dmypy.json
 *.swp
 *.py~
 *.un~
-songs/
-training_checkpoints/
+rnn_beat/songs/
+rnn_beat/training_checkpoints/
