@@ -5,9 +5,10 @@ print(tf.__version__)
 import numpy as np
 import os
 import time
+import string
 
 
-text = open("takt_string.txt", 'rb').read().decode(encoding='utf-8')
+text = open("note_beats.txt", 'rb').read().decode(encoding='utf-8')
 
 #create the alphabet
 vocab = sorted(set(text))
@@ -134,66 +135,45 @@ class OneStep(tf.keras.Model):
     # Return the characters and model state.
     return predicted_chars, states
 
-
 one_step_model = OneStep(model, chars_from_ids, ids_from_chars)
 
-# use 1/16 as default note
-def char_to_abc(c):
-    if c == 'a':
-        return "1"
-    elif c == 'b':
-        return "2"
-    elif c == 'c':
-        return "3"
-    elif c == 'd':
-        return "4"
-    elif c == 'e':
-        return "6"
-    elif c == 'f':
-        return "8"
-    elif c == 'g':
-        return "16"
-    return ""
 
-def char_to_val(c):
-    if c == 'a':
-        return 1
-    elif c == 'b':
-        return 2
-    elif c == 'c':
-        return 3
-    elif c == 'd':
-        return 4
-    elif c == 'e':
-        return 6
-    elif c == 'f':
-        return 8
-    elif c == 'g':
-        return 16
+## Print to abc format
+
+# decode the character to the number of beats in the abc format
+# use 1/16 as default
+def char_to_beats(c):
+    alphabet = list(string.ascii_lowercase)
+    if c in alphabet:
+        return alphabet.index(c)
     return 0
 
-
 states = None
-next_char = tf.constant(['bbaab'])
+# Pick starting notes
+next_char = tf.constant(['ccbbc'])
 result = [next_char]
 song = "|"
-for _ in range(20):
+num_bars = 20
+for _ in range(num_bars):
     measure = []
+    # loop until the meassure is filled (4/4 time signature)
     while True:
+        # Use model to predict next char
         next_char, states = one_step_model.generate_one_step(next_char, states=states)
         c = tf.strings.join([next_char])[0].numpy().decode("utf-8")
-        s = sum([char_to_val(cm) for cm in measure]) + char_to_val(c) 
+        # How many beats in the meassure if the note is used
+        s = sum([char_to_beats(c) for c in measure]) + char_to_beats(c) 
         if s <= 16:
             if c != "":
                 measure.append(c)
         if s == 16:
             break
     for b in measure:
-        song += ("*"+char_to_abc(b)+" ")
+        song += ("*"+str(char_to_beats(b))+" ")
     song += "|"
 
         
-f = open("gen_takt.txt", "w")
+f = open("generated_beats.txt", "w")
 f.write(song)
 f.close()
 

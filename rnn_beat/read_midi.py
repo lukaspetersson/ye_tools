@@ -32,7 +32,7 @@ def write_beats_as_chars(songs):
     alphabet = list(string.ascii_lowercase)
     for song in songs:
         for note in song:
-            # encode 1/16th note as 'a', 2/16th as 'b', ...
+            # encode 0/16th note as 'a', 1/16th as 'b', ...
             msg += alphabet[int(note*4)]
         if len(msg) > 0:
             msg += '\n'
