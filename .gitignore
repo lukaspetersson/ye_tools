@@ -136,3 +136,4 @@ dmypy.json
 *.un~
 rnn_beat/songs/
 rnn_beat/training_checkpoints/
+lstm/data/
