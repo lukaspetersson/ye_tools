@@ -1,5 +1,6 @@
 ##
 import numpy as np
+import tqdm
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
@@ -33,8 +34,8 @@ class Dataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         song, i = self.get_song(idx)
         #TODO: what if seq_len > len(song)
-        x = torch.tensor(song[i:i+self.seq_len])
-        y = torch.tensor(song[i+1:i+self.seq_len+1])
+        x = torch.tensor(song[i:i+self.seq_len], dtype=torch.int8).float()
+        y = torch.tensor(song[i+1:i+self.seq_len+1], dtype=torch.int8).float()
         return (x, y)
 
 ##
@@ -42,9 +43,9 @@ dataset = Dataset("data/data.npy", 20)
 dataset.__getitem__(100)[1].size()
 
 ##
-class LSTM(nn.Module):
+class Model(nn.Module):
     def __init__(self, hidden_dim=256, num_layers=2):
-        super(LSTM, self).__init__()
+        super(Model, self).__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.lstm = nn.LSTM(128, self.hidden_dim, num_layers=self.num_layers, dropout=0.1)
@@ -54,8 +55,7 @@ class LSTM(nn.Module):
         output, state = self.lstm(x, prev_state)
         pred = self.linear(output)
         return pred, state
-##
-model = LSTM()
+model = Model()
 
 ##
 def train(dataset, model):
@@ -66,12 +66,13 @@ def train(dataset, model):
     #TODO: quasi newton?
     optimizer = optim.Adam(model.parameters(), lr=0.001)
 
-    for epoch in range(10):
+    for epoch in range(2):
         h_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.float32)
         c_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.float32)
 
-        for batch, (x, y) in enumerate(dataloader):
+        for x, y in tqdm(dataloader):
             optimizer.zero_grad()
+            print(x.dtype, y.dtype)
 
             y_pred, (h_t, c_t) = model(x, (h_t, c_t))
             #TODO: dimensions
@@ -82,7 +83,5 @@ def train(dataset, model):
 
             loss.backward()
             optimizer.step()
-
-            print({ 'epoch': epoch, 'batch': batch, 'loss': loss.item() })
-##
 train(dataset, model)
+##
