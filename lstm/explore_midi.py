@@ -184,6 +184,7 @@ class Song():
                     song = np.vstack([song, vec])
                 elif isinstance(note, music21.note.Rest):
                     song = np.vstack([song, vec])
+                #TODO: support chords
         song = np.delete(song, 0, 0)
         return song
 
@@ -214,3 +215,10 @@ print(len(vecs))
 ##
 np.set_printoptions(threshold=sys.maxsize)
 print(len(np.load("data/data.npy", allow_pickle=True)))
+
+##
+vec = np.load("data/data.npy", allow_pickle=True)
+for i, sixteenth in enumerate(vec[1]):
+    print(np.nonzero((sixteenth != 0))[0])
+    if i > 100:break
+

@@ -40,7 +40,45 @@ class Dataset(torch.utils.data.Dataset):
 
 ##
 dataset = Dataset("data/data.npy", 20)
-dataset.__getitem__(100)[1].size()
+dataset[100][1].size()
+
+##
+
+#TODO: problem if start with continue, for now discard here
+def vec_to_midi(vec):
+    song = [] 
+    notes = None
+    for sixteenth in vec:
+        print((sixteenth != 0).nonzero(as_tuple=True)[0])
+        if -1 in sixteenth:
+            # continue previous
+            if notes: dur += 1
+        else:
+            # beginning of chord, note or rest
+            if notes: song.append((notes, dur))
+            notes = (sixteenth == 1).nonzero(as_tuple=True)[0]
+            dur = 1
+    return song
+        
+##
+
+print(vec_to_midi(dataset[100][0]))
+print(vec_to_midi(dataset[100][1]))
+
+##
+a = torch.Tensor([ 0.,  0.,  0.,  1.,  0.,  1,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0., -1.,  0.,  0.,  0.,  0.,  0.,
+         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
+         0.,  0.])
+print(1 in a)
+print(-1 in a)
+print((a == 1).nonzero(as_tuple=True)[0])
 
 ##
 class Model(nn.Module):
@@ -85,3 +123,19 @@ def train(dataset, model):
             optimizer.step()
 train(dataset, model)
 ##
+def predict(dataset, model, text, next_words=100):
+    model.eval()
+
+    words = text.split(' ')
+    state_h, state_c = model.init_state(len(words))
+
+    for i in range(0, next_words):
+        x = torch.tensor([[dataset.word_to_index[w] for w in words[i:]]])
+        y_pred, (state_h, state_c) = model(x, (state_h, state_c))
+
+        last_word_logits = y_pred[0][-1]
+        p = torch.nn.functional.softmax(last_word_logits, dim=0).detach().numpy()
+        word_index = np.random.choice(len(last_word_logits), p=p)
+        words.append(dataset.index_to_word[word_index])
+
+    return words
