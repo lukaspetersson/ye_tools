@@ -7,32 +7,42 @@ import time
 import sys
 
 ##
+music21.environment.set("musescoreDirectPNGPath", "/usr/bin/mscore3")
+
+##
 len(glob.glob("data/adl-piano-midi/**/*.mid", recursive=True))
 
 ##
-score = music21.converter.parse("data/adl-piano-midi/Rock/Psychedelic Rock/Beatles/Hey Jude.mid")
+score = music21.converter.parse("data/adl-piano-midi/Rock/Art Rock/Talking Heads/Burning Down The House.mid")
+
+##
+score.parts[0].getInstrument()
+##
+score.parts[0].filter.ClassFilter("Rest").show()
+
+
+##
+for part in score.parts:
+    for note in part.notesAndRests:
 
 ##
 dir(score)
 
 ##
-#TODO: not working, for now use first part
+#TODO: not working, for now use first part, also very slow
 print(len(score.parts))
 score.chordify()
 print(len(score.parts))
 
 ##
-score.parts[0].recursionType
-
-##
-help(music21.duration.Duration)
+dir(score.parts[0])
 
 ##
 types = set()
 for el in score.recurse():
     types.add(type(el))
-    if isinstance(el, music21.key.Key):
-        print(el)
+    if isinstance(el, music21.instrument.Instrument):
+        print("HHHHHHHHHHHHHHHHHHhh")
 types
 
 ## 
@@ -157,7 +167,18 @@ class Song():
     def __init__(self, path):
         self.score = music21.converter.parse(path)
         self.acceptable_durations = set([i/4 for i in range(1, 17)])
-        self.notes = self.score.parts[0].recurse().notesAndRests
+        #TODO: use more parts
+        #TODO: filter out parts which are majority rests
+        #TODO: filter out bass and drums? which play melody?
+        self.notes = self.score.parts[-1].recurse().notesAndRests
+
+    def get_timesignature(self):
+        #return self.score.parts[0].getElementsByClass(music21.meter.TimeSignature)[0]
+        return self.score.parts[0].timeSignature()
+
+    def get_instrument(self):
+        #return self.score.parts[0].recurse().getElementsByClass(music21.instrument.Instrument)[0]
+        return self.score.parts[0].getInstrument()
 
     def has_unacceptable_duration(self):
         for note in self.notes:
@@ -171,7 +192,15 @@ class Song():
         i = music21.interval.Interval(k.tonic, music21.pitch.Pitch(p))
         self.score = self.score.transpose(i)
 
-    def get_vector_representation(self):
+    def count_note_types(self):
+        n, r, c = 0, 0, 0
+        for note in self.notes:
+            if isinstance(note, music21.note.Note): n += 1
+            elif isinstance(note, music21.note.Rest): r += 1
+            elif isinstance(note, music21.chord.Chord): c += 1
+        return (n, r, c)
+
+    def one_minus_hot_encode(self):
         song = np.zeros((128,), int)
         for note in self.notes:
             dur = int(note.duration.quarterLength*4)
@@ -188,9 +217,51 @@ class Song():
         song = np.delete(song, 0, 0)
         return song
 
+    def dur_hot_encode(self):
+        song = np.zeros((len(self.notes), 128), int)
+        for i, note in enumerate(self.notes):
+            dur = int(note.duration.quarterLength*4)
+            if isinstance(note, music21.note.Note):
+                song[i][note.pitch.midi] = dur
+            elif isinstance(note, music21.note.Rest):
+                pass
+            elif isinstance(note, music21.chord.Chord):
+                for p in note.pitches:
+                    song[i][p.midi] = dur
+        return song
+
+    def as_tuples(self):
+        song = np.zeros((len(self.notes), 2), int)
+        for i, note in enumerate(self.notes):
+            dur = int(note.duration.quarterLength*4)
+            if isinstance(note, music21.note.Note):
+                song[i][0] = note.pitch.midi
+                song[i][1] = dur
+            elif isinstance(note, music21.note.Rest):
+                pass
+            elif isinstance(note, music21.chord.Chord):
+                #TODO
+                pass
+        return song
+##
+song = Song("data/adl-piano-midi/Rock/Art Rock/Talking Heads/Burning Down The House.mid")
+
+##
+song.as_tuples()
+##
+song.count_note_types()
+
+##
+
+with open("data/test.txt", "w") as f:
+    with np.printoptions(threshold=np.inf):
+       f.write(np.array2string(song.as_tuples()))
+##
+len(song.score.parts.chordify())
+
 ##
 t0 = time.time()
-song = Song("data/adl-piano-midi/Rock/Art Rock/Talking Heads/Burning Down The House.mid")
+song = SongV2("data/adl-piano-midi/Rock/Art Rock/Talking Heads/Burning Down The House.mid")
 print(time.time()-t0)
 song.transpose()
 print(time.time()-t0)
@@ -203,13 +274,13 @@ print(song.has_unacceptable_duration())
 vecs = []
 for i, file in enumerate(glob.glob("data/adl-piano-midi/**/*.mid", recursive=True)):
     if i > 100: break
-    song = Song(file)
+    song = SongV2(file)
     if song.has_unacceptable_duration():
         continue
     song.transpose()
     vec = song.get_vector_representation()
     vecs.append(vec)
-np.save("data/data.npy", np.asarray(vecs), allow_pickle=True)
+np.save("data/datav2.npy", np.asarray(vecs), allow_pickle=True)
 print(len(vecs))
 
 ##
