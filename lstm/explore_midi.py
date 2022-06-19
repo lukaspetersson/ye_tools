@@ -1,5 +1,5 @@
 ##
-import music21 as m21
+import m21 as m21
 import numpy as np
 from collections import Counter, defaultdict
 import glob
@@ -158,43 +158,36 @@ for note in song[100:120]:
 print(stream.timeSignature)
 
 ##
-score = m21.converter.parse("data/lmd_full/a/a00b0f5acc0fd4e4fc9f32830d61978d.mid")
-
-##
-score.show()
-
-##
-print(score.parts[4].analyze("key"))
-
-##
-#TODO: filter out >4 and <0.25
-#TODO: use more parts
-#TODO: filter out parts which are majority rests
-#TODO: filter out bass and drums? which play melody?
 class Part():
     def __init__(self, part):
         self.part = part
 
-    def get_timesignature(self):
-        return self.part.timeSignature
-
     def get_instrument(self):
         return self.part.getInstrument()
 
-    def transpose(self):
-        k = self.score.analyze("key")
-        p = "C" if k.mode == "major" else "A"
-        i = m21.interval.Interval(k.tonic, music21.pitch.Pitch(p))
-        self.score = self.score.transpose(i)
-
     def count_note_types(self):
         n, r, c = 0, 0, 0
-        for note in self.notes:
+        for note in self.part.notesAndRests:
             if isinstance(note, m21.note.Note): n += 1
             elif isinstance(note, m21.note.Rest): r += 1
             elif isinstance(note, m21.chord.Chord): c += 1
         return (n, r, c)
 
+    def as_tuples(self):
+        song = np.zeros((len(self.part.notesAndRests), 2), int)
+        for i, note in enumerate(self.part.notesAndRests):
+            dur = int(note.duration.quarterLength*4)
+            if isinstance(note, m21.note.Note):
+                song[i][0] = note.pitch.midi
+                song[i][1] = dur
+            elif isinstance(note, m21.note.Rest):
+                pass
+            elif isinstance(note, m21.chord.Chord):
+                #TODO
+                pass
+        return song
+
+'''
     def one_minus_hot_encode(self):
         song = np.zeros((128,), int)
         for note in self.notes:
@@ -224,26 +217,21 @@ class Part():
                 for p in note.pitches:
                     song[i][p.midi] = dur
         return song
-
-    def as_tuples(self):
-        song = np.zeros((len(self.notes), 2), int)
-        for i, note in enumerate(self.notes):
-            dur = int(note.duration.quarterLength*4)
-            if isinstance(note, m21.note.Note):
-                song[i][0] = note.pitch.midi
-                song[i][1] = dur
-            elif isinstance(note, m21.note.Rest):
-                pass
-            elif isinstance(note, m21.chord.Chord):
-                #TODO
-                pass
-        return song
+'''
 
 class Song():
-    def __init__(self, path):
+    def __init__(self, path, transpose=True):
         self.score = m21.converter.parse(path)
-        self.parts = [Part(part) for part in score.parts]
-        self._excluded = set()
+
+        if transpose:
+            #TODO: different parts have different keys, but they shouldnt
+            k = self.score.analyze("key")
+            p = "C" if k.mode == "major" else "A"
+            i = m21.interval.Interval(k.tonic, m21.pitch.Pitch(p))
+            self.score = self.score.transpose(i)
+
+        self.parts = [Part(part) for part in self.score.parts]
+        self.excluded = set()
         self._key = None
     
     def _include(self, i):
@@ -253,50 +241,59 @@ class Song():
         self.excluded.add(i)
 
     def part_exclusion(self, func):
-        for i, part in enumerate(parts):
+        for i, part in enumerate(self.parts):
             if func(part):
                 self._exclude(i)
     
     def note_exclusion(self, func):
-        for i, part in enumerate(parts):
-            if any(map(func, part.notesAndRests)):
+        for i, part in enumerate(self.parts):
+            if any(map(func, part.part.notesAndRests)):
                 self._exclude(i)
 
     def filter_notes(self, func):
-        for i, part in enumerate(parts):
-            for note in part.notesAndRests:
+        for i, part in enumerate(self.parts):
+            for note in part.part.notesAndRests:
                 if func(note):
-                    slef.parts[i].pop(note)
+                    idx = self.parts[i].part.index(note)
+                    self.parts[i].part.pop(idx)
     
     def key(self):
         if not self._key:
+            #TODO: does this work?
             self._key = self.score.analyze("key")
         return self._key
 
     def to_stream(self):
         s = m21.stream.Stream()
-        for i, part in enumerate(parts):
-            if i not in excluded: 
-                s.append(part)
+        for i, part in enumerate(self.parts):
+            if i not in self.excluded: 
+                s.append(part.part)
         return s
 
+    def get_part(self, i):
+        return self.parts[i]
 
-    def show(self, i=None):
-        if i:
-            parts[i].show()
+    def show(self, fmt="musicxml" ,i=-1):
+        if i > -1:
+            self.parts[i].part.show(fmt)
         else:
-            self.to_stream().show()
+            self.to_stream().show(fmt)
 
 ##
-song = Song("data/adl-piano-midi/Rock/Art Rock/Talking Heads/Burning Down The House.mid")
+song = Song("data/lmd_full/a/a00b0f5acc0fd4e4fc9f32830d61978d.mid", transpose=False)
+# filter notes with duration >4 and <0.25
+song.filter_notes(lambda note: not (0.25 <= float(note.duration.quarterLength) <= 4))
+# filter out non 4ths
+song.note_exclusion(lambda note:  float(note.duration.quarterLength) not in [i/4 for i in range(1, 17)])
+# filter out instruments
+song.part_exclusion(lambda part: isinstance(part.get_instrument(), m21.instrument.Sampler))
+song.excluded
 
 ##
-song.as_tuples()
-##
-song.count_note_types()
+for part in song.parts:
+    print(type(part.get_instrument()))
 
 ##
-
 with open("data/test.txt", "w") as f:
     with np.printoptions(threshold=np.inf):
        f.write(np.array2string(song.as_tuples()))
