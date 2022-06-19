@@ -5,113 +5,60 @@ from collections import Counter, defaultdict
 import glob
 import time
 import os
-import subprocess
-import sys
-from contextlib import contextmanager
-
-##
-s = m21.stream.Stream()
-s.warnings = False
-
 
 ##
 score = m21.converter.parse("data/lmd_full/a/a00b0f5acc0fd4e4fc9f32830d61978d.mid")
 
 ##
-print(inspect.signature(m21.stream.Stream().show()))
+# 
+def include_note(note):
+        return float(note.duration.quarterLength) <= 4 and not (float(note.duration.quarterLength) != 4 and isinstance(note, m21.note.Rest)):
 
-##
-@contextmanager
-def suppress_stdout():
-    with open(os.devnull, "w") as devnull:
-        old_stdout = sys.stdout
-        sys.stdout = devnull
-        try:
-            yield
-        finally:
-            sys.stdout = old_stdout
-
-##
 stream = m21.stream.Stream()
 for part in score.parts:
     s = m21.stream.Stream()
     for note in part.notesAndRests:
-        if float(note.duration.quarterLength) <= 4 and not (float(note.duration.quarterLength) != 4 and isinstance(note, m21.note.Rest)):
+        if include_note(note):
             s.append(note)
     stream.append(s)
 
-print(len(stream.scores))
 ##
-stream.write("midi", fp="/home/lukas/ye_tools/lstm/test.midi")
-#os.system("mscore3 test.midi")
-subprocess.run("mscore3 test.midi", shell=True, check=False)
+stream.show()
 
 ##
-with contextlib.redirect_stdout(None):
-    stream.show()
+stream.write()
 
 ##
-s = m21.stream.Stream()
-s.append(score.parts[7])
-#s.append(score.parts[1].notesAndRests)
-s.write("lily.png",fp="~/ye_tools/lstm/test.png")
+len(glob.glob("data/lmd_full/**/*.mid", recursive=True))
 
 ##
-print("Hello"
-
-##
-m21.environment.set("musescoreDirectPNGPath", "/usr/bin/mscore3")
-
-##
-len(glob.glob("data/adl-piano-midi/**/*.mid", recursive=True))
-
-
-##
-score.parts[0].timeSignature
-##
-s = m21.stream.Stream()
-s.append(score)
-s.show()
-#score.parts[0].iter().filter.ClassFilter("Rest").show()
-
-
-##
-for part in score.parts:
-    for note in part.notesAndRests:
-
-##
+# score, part, meassure is subset of stream
 dir(score)
-
-##
-#TODO: not working, for now use first part, also very slow
-print(len(score.parts))
-score.chordify()
-print(len(score.parts))
-
-##
-dir(score.parts[0])
 
 ##
 types = set()
 for el in score.recurse():
     types.add(type(el))
-    if isinstance(el, m21.instrument.Instrument):
-        print("HHHHHHHHHHHHHHHHHHhh")
 types
 
 ## 
+# analyze key signature
+
+# use analyze() even if it is slow, other strategy does not allways work
 t0 = time.time()
+#method 1
 k = score.analyze('key')
 print(time.time()-t0)
 t0 = time.time()
+#method 2
 for el in score.recurse():
     if isinstance(el, m21.key.Key):
         break
 print(time.time()-t0)
-print(k==el)
+print(k, el)
 
 ##
-#Method 2 does not work!
+# show that method only sometimes work
 for i, file in enumerate(glob.glob("data/adl-piano-midi/**/*.mid", recursive=True)):
     if i > 5: break
     s = m21.converter.parse(file)
@@ -123,9 +70,13 @@ for i, file in enumerate(glob.glob("data/adl-piano-midi/**/*.mid", recursive=Tru
             print(el, k, file)
     
 ##
+# investigate if most songs has acceptable durations
+# 1/2 has only acceptable, 1/4 has many 1/3 notes, 1/4 has a few >4 notes 
+# 75% should be useable
+
 count = 0
 acceptable_durations = set([i/4 for i in range(1, 17)])
-for i, file in enumerate(glob.glob("data/adl-piano-midi/**/*.mid", recursive=True)):
+for i, file in enumerate(glob.glob("data/lmd_full/3/**/*.mid", recursive=True)):
     if i > 30: break
     s = m21.converter.parse(file)
     c = []
@@ -136,21 +87,25 @@ for i, file in enumerate(glob.glob("data/adl-piano-midi/**/*.mid", recursive=Tru
         count+=1
         print(c)
         print(file)
-print(count, i)
+print(count)
 
 ##
+# transpose key C major or A minor
+
 k = score.analyze('key')
 p = "C" if k.mode == "major" else "A"
-i = m21.interval.Interval(k.tonic, music21.pitch.Pitch(p))
+i = m21.interval.Interval(k.tonic, m21.pitch.Pitch(p))
 score = score.transpose(i)
 print("Transformed from key:", k, "to:", score.analyze('key'))
 
 ##
+# count durations of each note type
+
 durations = defaultdict(list)
-for i, file in enumerate(glob.glob("data/adl-piano-midi/**/*.mid", recursive=True)):
-    if i > 10: break
+for i, file in enumerate(glob.glob("data/lmd_full/0/**/*.mid", recursive=True)):
+    if i > 0: break
     s = m21.converter.parse(file)
-    for el in score.recurse().notesAndRests:
+    for el in s.recurse().notesAndRests:
         if isinstance(el, m21.note.Note):
             durations["note"].append(float(el.duration.quarterLength))
         elif isinstance(el, m21.chord.Chord):
@@ -165,16 +120,6 @@ print(sorted(Counter(durations["chord"]).items(), key=lambda x: -x[1]))
 print("Rest durations")
 print(sorted(Counter(durations["rest"]).items(), key=lambda x: -x[1]))
 
-##
-acceptable_durations = set([i/4 for i in range(1, 17)])
-
-##
-# whole note with duration 1 and pitch 3
-a = np.zeros((4, 8),int)
-a[0][3] = 1
-for i in range(1, 4):
-    a[i][3] = -1
-
 
 ##
 a = np.ones((8,), int)
@@ -185,12 +130,6 @@ print(len(a))
 for i in a:
     print(i)
 print(len(a))
-
-##
-#TODO: can order be gueranteed?
-for note in score.recurse().notesAndRests:
-    print(note.offset)
-
 
 ## 
 #TODO: only accept ceirtain quarterlengths
@@ -215,30 +154,32 @@ for note in song[100:120]:
         print("continue", np.argwhere(note==-1)[0])
     else:
         print("rest")
+##
+print(stream.timeSignature)
 
 ##
-class Song():
-    def __init__(self, path):
-        self.score = m21.converter.parse(path)
-        self.acceptable_durations = set([i/4 for i in range(1, 17)])
-        #TODO: use more parts
-        #TODO: filter out parts which are majority rests
-        #TODO: filter out bass and drums? which play melody?
-        self.notes = self.score.parts[-1].recurse().notesAndRests
+score = m21.converter.parse("data/lmd_full/a/a00b0f5acc0fd4e4fc9f32830d61978d.mid")
+
+##
+score.show()
+
+##
+print(score.parts[4].analyze("key"))
+
+##
+#TODO: filter out >4 and <0.25
+#TODO: use more parts
+#TODO: filter out parts which are majority rests
+#TODO: filter out bass and drums? which play melody?
+class Part():
+    def __init__(self, part):
+        self.part = part
 
     def get_timesignature(self):
-        #return self.score.parts[0].getElementsByClass(m21.meter.TimeSignature)[0]
-        return self.score.parts[0].timeSignature
+        return self.part.timeSignature
 
     def get_instrument(self):
-        #return self.score.parts[0].recurse().getElementsByClass(m21.instrument.Instrument)[0]
-        return self.score.parts[0].getInstrument()
-
-    def has_unacceptable_duration(self):
-        for note in self.notes:
-            if float(note.duration.quarterLength) not in self.acceptable_durations and float(note.duration.quarterLength) < 4:
-                return True
-        return False
+        return self.part.getInstrument()
 
     def transpose(self):
         k = self.score.analyze("key")
@@ -297,6 +238,55 @@ class Song():
                 #TODO
                 pass
         return song
+
+class Song():
+    def __init__(self, path):
+        self.score = m21.converter.parse(path)
+        self.parts = [Part(part) for part in score.parts]
+        self._excluded = set()
+        self._key = None
+    
+    def _include(self, i):
+        self.excluded.remove(i)
+
+    def _exclude(self, i):
+        self.excluded.add(i)
+
+    def part_exclusion(self, func):
+        for i, part in enumerate(parts):
+            if func(part):
+                self._exclude(i)
+    
+    def note_exclusion(self, func):
+        for i, part in enumerate(parts):
+            if any(map(func, part.notesAndRests)):
+                self._exclude(i)
+
+    def filter_notes(self, func):
+        for i, part in enumerate(parts):
+            for note in part.notesAndRests:
+                if func(note):
+                    slef.parts[i].pop(note)
+    
+    def key(self):
+        if not self._key:
+            self._key = self.score.analyze("key")
+        return self._key
+
+    def to_stream(self):
+        s = m21.stream.Stream()
+        for i, part in enumerate(parts):
+            if i not in excluded: 
+                s.append(part)
+        return s
+
+
+    def show(self, i=None):
+        if i:
+            parts[i].show()
+        else:
+            self.to_stream().show()
+
 ##
 song = Song("data/adl-piano-midi/Rock/Art Rock/Talking Heads/Burning Down The House.mid")
 
