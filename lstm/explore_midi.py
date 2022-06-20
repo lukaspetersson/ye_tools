@@ -166,7 +166,8 @@ song.show("text", idx)
 class Part():
     def __init__(self, part):
         self.part = part
-        self.notes = m21.stream.Stream(part.recurse().notesAndRests)
+        #TODO: how to represent chords and rests??
+        self.notes = m21.stream.Stream([note for note in part.recurse().notesAndRests if isinstance(note, m21.note.Note)
 
     def get_instrument_type(self):
         return type(self.part.getInstrument())
@@ -179,6 +180,9 @@ class Part():
             elif isinstance(note, m21.chord.Chord): c += 1
         return (n, r, c)
 
+    def count_durations(self, note_type):
+        return Counter([float(note.duration.quarterLength) for note in self.notes if isinstance(note, note_type)])
+
     def as_tuples(self):
         vec = np.zeros((len(self.notes), 2), int)
         for i, note in enumerate(self.notes):
@@ -187,9 +191,6 @@ class Part():
                 vec[i][0] = note.pitch.midi
                 vec[i][1] = dur
             elif isinstance(note, m21.note.Rest):
-                pass
-            elif isinstance(note, m21.chord.Chord):
-                #TODO
                 pass
         return vec
 
@@ -285,56 +286,49 @@ class Song():
         else:
             self.to_stream().show(fmt)
 
+    def as_vector(self):
+        return [part.as_tuples() for part in self.parts]
+
 ##
 song = Song("data/lmd_full/3/3003bbf06bec7c8ff1add82b50a84ae4.mid", transpose=False)
 # filter notes with duration >4 and <0.25
+print(song.get_part(0).count_note_types())
 song.filter_notes(lambda note: not (0.25 <= float(note.duration.quarterLength) <= 4))
+print(song.get_part(0).count_note_types())
 # filter out non 4ths
-song.note_exclusion(lambda note:  float(note.duration.quarterLength) not in [i/4 for i in range(1, 17)])
+print(song.get_part(0).count_durations(m21.note.Note))
+song.filter_notes(lambda note:  float(note.duration.quarterLength) not in [i/4 for i in range(1, 17)])
+print(song.get_part(0).count_durations(m21.note.Note))
 # filter out instruments
 song.part_exclusion(lambda part: part.get_instrument_type() == m21.instrument.Sampler)
-song.excluded
+print(song.excluded)
 
 ##
 song = Song("data/lmd_full/3/3003bbf06bec7c8ff1add82b50a84ae4.mid", transpose=False)
-song.show()
+song.as_vector()
+
 
 ##
-for part in song.parts:
-    print(type(part.get_instrument()))
-
-##
-song = Song("data/lmd_full/a/a00b0f5acc0fd4e4fc9f32830d61978d.mid", transpose=False)
-#print(song.get_part(3).get_instrument_type())
-#print(len(song.get_part(3).part.recurse().notesAndRests))
-
-##
+# Transpose is really slow
 t0 = time.time()
-song = SongV2("data/lmd_full/3/3000f058dee377b7586acda383472d5a.mid")
+song = Song("data/lmd_full/3/3003bbf06bec7c8ff1add82b50a84ae4.mid", transpose=False)
 print(time.time()-t0)
-song.transpose()
+
+t0 = time.time()
+song = Song("data/lmd_full/3/3003bbf06bec7c8ff1add82b50a84ae4.mid")
 print(time.time()-t0)
-vec = song.get_vector_representation()
-print(time.time()-t0)
-# 1s per song = 3h
-print(song.has_unacceptable_duration())
 
 ##
 vecs = []
-for i, file in enumerate(glob.glob("data/adl-piano-midi/**/*.mid", recursive=True)):
-    if i > 100: break
-    song = SongV2(file)
-    if song.has_unacceptable_duration():
-        continue
-    song.transpose()
-    vec = song.get_vector_representation()
-    vecs.append(vec)
-np.save("data/datav2.npy", np.asarray(vecs), allow_pickle=True)
+for i, file in enumerate(glob.glob("data/lmd_full/0/**/*.mid", recursive=True)):
+    if i > 3: break
+    song = Song(file, transpose=False)
+    song.filter_notes(lambda note: not (0.25 <= float(note.duration.quarterLength) <= 4))
+    song.filter_notes(lambda note:  float(note.duration.quarterLength) not in [i/4 for i in range(1, 17)])
+    song.part_exclusion(lambda part: part.get_instrument_type() == m21.instrument.Sampler)
+    vecs += song.as_vector()
+np.save("data/data.npy", np.asarray(vecs), allow_pickle=True)
 print(len(vecs))
-
-##
-np.set_printoptions(threshold=sys.maxsize)
-print(len(np.load("data/data.npy", allow_pickle=True)))
 
 ##
 vec = np.load("data/data.npy", allow_pickle=True)
