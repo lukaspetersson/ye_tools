@@ -158,34 +158,40 @@ for note in song[100:120]:
 print(stream.timeSignature)
 
 ##
+idx = 3 
+print(len(song.get_part(idx).part), len(song.get_part(idx).part.recurse()))
+song.show("text", idx)
+
+##
 class Part():
     def __init__(self, part):
         self.part = part
+        self.notes = m21.stream.Stream(part.recurse().notesAndRests)
 
-    def get_instrument(self):
-        return self.part.getInstrument()
+    def get_instrument_type(self):
+        return type(self.part.getInstrument())
 
     def count_note_types(self):
         n, r, c = 0, 0, 0
-        for note in self.part.notesAndRests:
+        for note in self.notes:
             if isinstance(note, m21.note.Note): n += 1
             elif isinstance(note, m21.note.Rest): r += 1
             elif isinstance(note, m21.chord.Chord): c += 1
         return (n, r, c)
 
     def as_tuples(self):
-        song = np.zeros((len(self.part.notesAndRests), 2), int)
-        for i, note in enumerate(self.part.notesAndRests):
+        vec = np.zeros((len(self.notes), 2), int)
+        for i, note in enumerate(self.notes):
             dur = int(note.duration.quarterLength*4)
             if isinstance(note, m21.note.Note):
-                song[i][0] = note.pitch.midi
-                song[i][1] = dur
+                vec[i][0] = note.pitch.midi
+                vec[i][1] = dur
             elif isinstance(note, m21.note.Rest):
                 pass
             elif isinstance(note, m21.chord.Chord):
                 #TODO
                 pass
-        return song
+        return vec
 
 '''
     def one_minus_hot_encode(self):
@@ -247,15 +253,15 @@ class Song():
     
     def note_exclusion(self, func):
         for i, part in enumerate(self.parts):
-            if any(map(func, part.part.notesAndRests)):
+            if any(map(func, part.notes)):
                 self._exclude(i)
 
     def filter_notes(self, func):
         for i, part in enumerate(self.parts):
-            for note in part.part.notesAndRests:
+            for note in part.notes:
                 if func(note):
-                    idx = self.parts[i].part.index(note)
-                    self.parts[i].part.pop(idx)
+                    idx = self.parts[i].notes.index(note)
+                    self.parts[i].notes.pop(idx)
     
     def key(self):
         if not self._key:
@@ -267,7 +273,7 @@ class Song():
         s = m21.stream.Stream()
         for i, part in enumerate(self.parts):
             if i not in self.excluded: 
-                s.append(part.part)
+                s.append(part.notes)
         return s
 
     def get_part(self, i):
@@ -275,34 +281,36 @@ class Song():
 
     def show(self, fmt="musicxml" ,i=-1):
         if i > -1:
-            self.parts[i].part.show(fmt)
+            self.parts[i].notes.show(fmt)
         else:
             self.to_stream().show(fmt)
 
 ##
-song = Song("data/lmd_full/a/a00b0f5acc0fd4e4fc9f32830d61978d.mid", transpose=False)
+song = Song("data/lmd_full/3/3003bbf06bec7c8ff1add82b50a84ae4.mid", transpose=False)
 # filter notes with duration >4 and <0.25
 song.filter_notes(lambda note: not (0.25 <= float(note.duration.quarterLength) <= 4))
 # filter out non 4ths
 song.note_exclusion(lambda note:  float(note.duration.quarterLength) not in [i/4 for i in range(1, 17)])
 # filter out instruments
-song.part_exclusion(lambda part: isinstance(part.get_instrument(), m21.instrument.Sampler))
+song.part_exclusion(lambda part: part.get_instrument_type() == m21.instrument.Sampler)
 song.excluded
+
+##
+song = Song("data/lmd_full/3/3003bbf06bec7c8ff1add82b50a84ae4.mid", transpose=False)
+song.show()
 
 ##
 for part in song.parts:
     print(type(part.get_instrument()))
 
 ##
-with open("data/test.txt", "w") as f:
-    with np.printoptions(threshold=np.inf):
-       f.write(np.array2string(song.as_tuples()))
-##
-len(song.score.parts.chordify())
+song = Song("data/lmd_full/a/a00b0f5acc0fd4e4fc9f32830d61978d.mid", transpose=False)
+#print(song.get_part(3).get_instrument_type())
+#print(len(song.get_part(3).part.recurse().notesAndRests))
 
 ##
 t0 = time.time()
-song = SongV2("data/adl-piano-midi/Rock/Art Rock/Talking Heads/Burning Down The House.mid")
+song = SongV2("data/lmd_full/3/3000f058dee377b7586acda383472d5a.mid")
 print(time.time()-t0)
 song.transpose()
 print(time.time()-t0)
