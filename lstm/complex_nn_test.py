@@ -30,7 +30,6 @@ model.train()
 opt = optim.Adam(model.parameters())
 loss_fn = nn.L1Loss()
 
-##
 y = torch.view_as_complex(torch.tensor([0.5, 0.1], dtype=torch.float))
 for _ in range(500):
     inputs = torch.randn((1000, 5), dtype=torch.cfloat)
@@ -40,5 +39,6 @@ for _ in range(500):
     opt.step()
 
 ##
+model.eval()
 x = torch.randn((5,), dtype=torch.cfloat)
 model(x)
