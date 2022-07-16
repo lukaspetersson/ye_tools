@@ -13,16 +13,16 @@ class Dataset(torch.utils.data.Dataset):
         self.data = np.load(data_dir, allow_pickle=True)
         self.seq_len = seq_len
 
-    def data_in_song(self, song):
-        return len(song) - self.seq_len
+    def data_in_part(self, part):
+        return len(part) - (self.seq_len + 1)
 
     def __len__(self):
         l = 0
-        for song in self.data:
-            l += self.data_in_song(song)
+        for part in self.data:
+            l += self.data_in_song(part)
         return l
 
-    def get_song(self, idx):
+    def get_part(self, idx):
         i = idx
         for song in self.data:
             if i - self.data_in_song(song) < 0:
@@ -32,53 +32,19 @@ class Dataset(torch.utils.data.Dataset):
         return (song, i)
 
     def __getitem__(self, idx):
-        song, i = self.get_song(idx)
-        #TODO: what if seq_len > len(song)
-        x = torch.tensor(song[i:i+self.seq_len], dtype=torch.int8).float()
-        y = torch.tensor(song[i+1:i+self.seq_len+1], dtype=torch.int8).float()
+        for part in self.data:
+            num_datapoints = self.data_in_part(part)
+            if idx - num_datapoints < 0:
+                break
+            else:
+                idx -= num_datapoints
+        x = torch.tensor(part[i:i+self.seq_len], dtype=torch.int8).float()
+        y = torch.tensor(part[i+1:i+self.seq_len+1], dtype=torch.int8).float()
         return (x, y)
 
 ##
-dataset = Dataset("data/data.npy", 20)
+dataset = Dataset("data/data.npy", 10)
 dataset[100][1].size()
-
-##
-
-#TODO: problem if start with continue, for now discard here
-def vec_to_midi(vec):
-    song = [] 
-    notes = None
-    for sixteenth in vec:
-        print((sixteenth != 0).nonzero(as_tuple=True)[0])
-        if -1 in sixteenth:
-            # continue previous
-            if notes: dur += 1
-        else:
-            # beginning of chord, note or rest
-            if notes: song.append((notes, dur))
-            notes = (sixteenth == 1).nonzero(as_tuple=True)[0]
-            dur = 1
-    return song
-        
-##
-
-print(vec_to_midi(dataset[100][0]))
-print(vec_to_midi(dataset[100][1]))
-
-##
-a = torch.Tensor([ 0.,  0.,  0.,  1.,  0.,  1,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
-         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
-         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
-         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0., -1.,  0.,  0.,  0.,  0.,  0.,
-         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
-         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
-         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
-         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
-         0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,  0.,
-         0.,  0.])
-print(1 in a)
-print(-1 in a)
-print((a == 1).nonzero(as_tuple=True)[0])
 
 ##
 class Model(nn.Module):

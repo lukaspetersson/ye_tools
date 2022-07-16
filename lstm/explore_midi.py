@@ -7,8 +7,6 @@ import time
 import os
 
 ##
-
-##
 # Test to filter out notes and display them
 
 score = m21.converter.parse("data/lmd_full/a/a00b0f5acc0fd4e4fc9f32830d61978d.mid")
@@ -194,19 +192,21 @@ Other ways to encode the part, not in use
 
 class Song():
     def __init__(self, path, transpose=True):
-        self.score = m21.converter.parse(path)
+        try:
+            self.score = m21.converter.parse(path)
+            if transpose:
+                #TODO: different parts have different keys, but they shouldnt
+                #TODO: too slow to transpose all songs
+                k = self.score.analyze("key")
+                p = "C" if k.mode == "major" else "A"
+                i = m21.interval.Interval(k.tonic, m21.pitch.Pitch(p))
+                self.score = self.score.transpose(i)
 
-        if transpose:
-            #TODO: different parts have different keys, but they shouldnt
-            #TODO: too slow to transpose all songs
-            k = self.score.analyze("key")
-            p = "C" if k.mode == "major" else "A"
-            i = m21.interval.Interval(k.tonic, m21.pitch.Pitch(p))
-            self.score = self.score.transpose(i)
+            self.parts = [Part(part) for part in self.score.parts]
+        except music21.midi.MidiException:
+            self.parts = []
 
-        self.parts = [Part(part) for part in self.score.parts]
         self.excluded_parts = set()
-        self._key = None
     
     def _include(self, i):
         self.excluded_parts.remove(i)
@@ -244,12 +244,6 @@ class Song():
                     count += 1
         return count
     
-    def get_key(self):
-        if not self._key:
-            #TODO: does this work?
-            self._key = self.score.analyze("key")
-        return self._key
-
     def to_stream(self):
         s = m21.stream.Stream()
         for i, part in enumerate(self.parts):
@@ -281,7 +275,22 @@ print(song.filter_notes(lambda note:  float(note.duration.quarterLength) not in 
 # filter out instruments
 print(song.part_exclusion(lambda part: part.get_instrument_type() == m21.instrument.Sampler))
 
-print(song.excluded_parts)
+# filter out parts with too much repetition
+print(song.part_exclusion(lambda part: np.std([int(note.pitch.midi) for note in part.notes]) < 5))
+
+print(song.excluded_parts, "len: "+str(len(song.parts)))
+
+##
+# Detect too much repetition
+# Print typical values for the standard deaviation of the part's pitches
+# 2 seem to be a good value to filter on
+
+for i, file in enumerate(glob.glob("data/lmd_full/0/**/*.mid", recursive=True)):
+    if i > 5: break
+    song = Song(file, transpose=False)
+    for part in song.parts:
+        print(np.std([int(note.pitch.midi) for note in part.notes]))
+        print(Counter([int(note.pitch.midi) for note in part.notes])) 
 
 ##
 song = Song("data/lmd_full/3/3003bbf06bec7c8ff1add82b50a84ae4.mid", transpose=False)
@@ -298,21 +307,25 @@ song = Song("data/lmd_full/3/3003bbf06bec7c8ff1add82b50a84ae4.mid")
 print(time.time()-t0)
 
 ##
-# Build dataset
+# Build dataset as list of parts
+# TODO: loses info that parts can share properties if they are from the same song
 vecs = []
 for i, file in enumerate(glob.glob("data/lmd_full/0/**/*.mid", recursive=True)):
-    if i > 3: break
+    if i > 100: break
     song = Song(file, transpose=False)
     # same filters as in test above
     song.filter_notes(lambda note: not (0.25 <= float(note.duration.quarterLength) <= 4))
     song.filter_notes(lambda note:  float(note.duration.quarterLength) not in [i/4 for i in range(1, 17)])
     song.part_exclusion(lambda part: part.get_instrument_type() == m21.instrument.Sampler)
+    song.part_exclusion(lambda part: np.std([int(note.pitch.midi) for note in part.notes]) < 2)
+
     vecs += song.as_vector()
 np.save("data/data.npy", np.asarray(vecs), allow_pickle=True)
 print(len(vecs))
 
 ##
 # Test loading dataset
+# TODO: many parts are boaring, just repeating same note
 vec = np.load("data/data.npy", allow_pickle=True)
 print(vec)
 
