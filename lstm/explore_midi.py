@@ -203,7 +203,7 @@ class Song():
                 self.score = self.score.transpose(i)
 
             self.parts = [Part(part) for part in self.score.parts]
-        except music21.midi.MidiException:
+        except m21.midi.MidiException:
             self.parts = []
 
         self.excluded_parts = set()
@@ -311,7 +311,7 @@ print(time.time()-t0)
 # TODO: loses info that parts can share properties if they are from the same song
 vecs = []
 for i, file in enumerate(glob.glob("data/lmd_full/0/**/*.mid", recursive=True)):
-    if i > 100: break
+    if i > 10: break
     song = Song(file, transpose=False)
     # same filters as in test above
     song.filter_notes(lambda note: not (0.25 <= float(note.duration.quarterLength) <= 4))
@@ -320,13 +320,13 @@ for i, file in enumerate(glob.glob("data/lmd_full/0/**/*.mid", recursive=True)):
     song.part_exclusion(lambda part: np.std([int(note.pitch.midi) for note in part.notes]) < 2)
 
     vecs += song.as_vector()
-np.save("data/data.npy", np.asarray(vecs), allow_pickle=True)
+np.save("data/data_small.npy", np.asarray(vecs), allow_pickle=True)
 print(len(vecs))
 
 ##
 # Test loading dataset
 # TODO: many parts are boaring, just repeating same note
-vec = np.load("data/data.npy", allow_pickle=True)
+vec = np.load("data/data_small.npy", allow_pickle=True)
 print(vec)
 
 
