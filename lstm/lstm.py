@@ -47,9 +47,9 @@ dataset = Dataset("data/data.npy", 10)
 dataset[100][1].size()
 
 ##
-class Model(nn.Module):
+class LstmModel(nn.Module):
     def __init__(self, hidden_dim=256, num_layers=2):
-        super(Model, self).__init__()
+        super(LstmModel, self).__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
         self.lstm = nn.LSTM(128, self.hidden_dim, num_layers=self.num_layers, dropout=0.1)
