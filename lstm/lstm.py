@@ -2,6 +2,7 @@
 import numpy as np
 import tqdm
 import torch
+from torch import nn, optim
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
@@ -9,7 +10,7 @@ torch.manual_seed(1)
 
 ##
 class Dataset(torch.utils.data.Dataset):
-    def __init__(self, data_dir, seq_len):
+    def __init__(self, data_dir, seq_len=SEQ_LEN):
         self.data = np.load(data_dir, allow_pickle=True)
         self.seq_len = seq_len
 
@@ -19,7 +20,7 @@ class Dataset(torch.utils.data.Dataset):
     def __len__(self):
         l = 0
         for part in self.data:
-            l += self.data_in_song(part)
+            l += self.data_in_part(part)
         return l
 
     def get_part(self, idx):
@@ -38,28 +39,24 @@ class Dataset(torch.utils.data.Dataset):
                 break
             else:
                 idx -= num_datapoints
-        x = torch.tensor(part[i:i+self.seq_len], dtype=torch.int8).float()
-        y = torch.tensor(part[i+1:i+self.seq_len+1], dtype=torch.int8).float()
+        #TODO: must be float?
+        x = torch.tensor(part[idx:idx+self.seq_len], dtype=torch.int8)
+        y = torch.tensor(part[idx+1:idx+self.seq_len+1], dtype=torch.int8)
         return (x, y)
 
 ##
-dataset = Dataset("data/data.npy", 10)
-dataset[100][1].size()
-
-##
 class LstmModel(nn.Module):
-    def __init__(self, hidden_dim=256, num_layers=2):
+    def __init__(self, hidden_dim=20, num_layers=2):
         super(LstmModel, self).__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(128, self.hidden_dim, num_layers=self.num_layers, dropout=0.1)
-        self.linear = nn.Linear(self.hidden_dim, 128)
+        self.lstm = nn.LSTM(2, self.hidden_dim, num_layers=self.num_layers, dropout=0.1)
+        self.linear = nn.Linear(self.hidden_dim, 2)
 
     def forward(self, x, prev_state):
         output, state = self.lstm(x, prev_state)
         pred = self.linear(output)
         return pred, state
-model = Model()
 
 ##
 def train(dataset, model):
@@ -68,25 +65,27 @@ def train(dataset, model):
     dataloader = DataLoader(dataset, batch_size=64)
     loss_fn = nn.CrossEntropyLoss()
     #TODO: quasi newton?
-    optimizer = optim.Adam(model.parameters(), lr=0.001)
+    opt = optim.Adam(model.parameters(), lr=0.001)
 
     for epoch in range(2):
-        h_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.float32)
-        c_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.float32)
+        h_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.int8)
+        c_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.int8)
 
-        for x, y in tqdm(dataloader):
-            optimizer.zero_grad()
-            print(x.dtype, y.dtype)
-
+        for x, y in dataloader:
+            opt.zero_grad()
+            print(x)
             y_pred, (h_t, c_t) = model(x, (h_t, c_t))
-            #TODO: dimensions
             loss = loss_fn(y_pred, y)
 
             h_t = h_t.detach()
             c_t = c_t.detach()
 
             loss.backward()
-            optimizer.step()
+            opt.step()
+##
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+model = LstmModel().to(device)
+dataset = Dataset("data/data_small.npy", SEQ_LEN)
 train(dataset, model)
 ##
 def predict(dataset, model, text, next_words=100):
