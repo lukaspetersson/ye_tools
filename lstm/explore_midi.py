@@ -7,9 +7,11 @@ import time
 import os
 
 ##
+score = m21.converter.parse("data/lmd_full/a/a00b0f5acc0fd4e4fc9f32830d61978d.mid")
+
+##
 # Test to filter out notes and display them
 
-score = m21.converter.parse("data/lmd_full/a/a00b0f5acc0fd4e4fc9f32830d61978d.mid")
 def include_note(note):
         return float(note.duration.quarterLength) <= 4 and not (float(note.duration.quarterLength) != 4 and isinstance(note, m21.note.Rest))
 
@@ -47,11 +49,40 @@ k = score.analyze('key')
 print(time.time()-t0)
 t0 = time.time()
 #method 2
-for el in score.recurse():
-    if isinstance(el, m21.key.Key):
+
+for el in score.flatten():
+    if isinstance(el, m21.key.KeySignature):
+        print(el)
         break
 print(time.time()-t0)
 print(k, el)
+
+##
+# parse is SOMETIMES really slow (range: 0.1 - 60s)
+# key is faster than krumhansl
+# TODO: timeout ceirtain songs
+# TODO: parallelize data analysis
+t_parse = []
+t_krum = []
+t_key= []
+for i, file in enumerate(glob.glob("data/lmd_full/0/**/*.mid", recursive=True)):
+    if i > 30: break
+
+    t0=time.time()
+    s = m21.converter.parse(file)
+    t_parse.append(time.time()-t0)
+
+    t0=time.time()
+    s.analyze('Krumhansl')
+    t_krum.append(time.time()-t0)
+
+    t0=time.time()
+    s.analyze('key')
+    t_key.append(time.time()-t0)
+
+print(t_parse)
+print(t_krum)
+print(t_key)
 
 ##
 # The 2 methods to get key signature dont produce same results
@@ -71,24 +102,27 @@ for i, file in enumerate(glob.glob("data/adl-piano-midi/**/*.mid", recursive=Tru
 # 1/2 has only acceptable, 1/4 has many 1/3 notes, 1/4 has a few >4 notes 
 # 75% should be useable
 
-count = 0
+tot_parts = 0
+useable_parts = 0
+
 acceptable_durations = set([i/4 for i in range(1, 17)])
-for i, file in enumerate(glob.glob("data/lmd_full/3/**/*.mid", recursive=True)):
-    if i > 10: break
+for i, file in enumerate(glob.glob("data/lmd_full/2/**/*.mid", recursive=True)):
+    if i > 30: break
     s = m21.converter.parse(file)
-    c = []
-    for note in s.parts[0].notesAndRests:
-        if float(note.duration.quarterLength) not in acceptable_durations:
-            c.append(float(note.duration.quarterLength))
-    if len(c) > 0:
-        count+=1
-        print(c)
-        print(file)
-print(count)
+    for part in s.parts:
+        tot_parts += 1
+        c = 0
+        for note in part.notes:
+            if float(note.duration.quarterLength) not in acceptable_durations:
+                c += 1
+        if c < 20:
+            useable_parts += 1
+print(useable_parts, tot_parts)
 
 ##
 # transpose to key C major or A minor
 # SUPER SLOW
+#TODO: solution, discard if not in C major or A minor?
 
 k = score.analyze('key')
 p = "C" if k.mode == "major" else "A"
@@ -193,6 +227,7 @@ Other ways to encode the part, not in use
 class Song():
     def __init__(self, path, transpose=True):
         try:
+            #TODO: timeout if reading takes more than a second
             self.score = m21.converter.parse(path)
             if transpose:
                 #TODO: different parts have different keys, but they shouldnt
