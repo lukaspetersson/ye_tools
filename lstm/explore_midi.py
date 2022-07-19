@@ -5,6 +5,7 @@ from collections import Counter, defaultdict
 import glob
 import time
 import os
+import matplotlib.pyplot as plt
 
 ##
 score = m21.converter.parse("data/lmd_full/a/a00b0f5acc0fd4e4fc9f32830d61978d.mid")
@@ -364,4 +365,12 @@ print(len(vecs))
 vec = np.load("data/data_small.npy", allow_pickle=True)
 print(vec)
 
+##
 
+data = np.transpose(np.concatenate(vec))
+plt.plot(data[0], data[1], 'o')
+
+##
+cov_mat = np.stack((data[0], data[1]), axis = 0)
+
+print(np.cov(cov_mat))
