@@ -93,14 +93,13 @@ def train(dataset, model):
 
 
 ##
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = CvnnModel(layer_dims=[SEQ_LEN, 10, 4]).to(device)
-dataset = Dataset("data/data_small.npy", SEQ_LEN)
+model = CvnnModel(layer_dims=[SEQ_LEN, 10, 4])
+dataset = Dataset("data/data.npy", SEQ_LEN)
 train(dataset, model)
 
 ##
 model.eval()
-x = torch.view_as_complex(torch.tensor([[45,2],[45,2],[48,4], [43,2], [45,2]], dtype=torch.float))
+x = torch.view_as_complex(torch.tensor([[45,2],[45,2],[48,4], [43,2], [42,2]], dtype=torch.float))
 model(x)
 
 ##
@@ -122,7 +121,7 @@ def to_stream(seq):
     return stream
 
 ##
-seq = generate(model, x, 30)
+seq = generate(model, x, 50)
 stream = to_stream(seq)
 stream.show()
 
