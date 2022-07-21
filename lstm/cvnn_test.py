@@ -33,6 +33,8 @@ y = x.clone().detach()
 y.apply_(func) 
 plt.plot([z.real for z in x], [z.real for z in y], 'ro')
 plt.plot([z.imag for z in x], [z.imag for z in y], 'bo')
+plt.title('Function')
+plt.legend(labels=['Real', 'Imaginary'])
 
 ##
 model = CvnnTest()
@@ -52,6 +54,9 @@ for _ in range(1000):
     opt.step()
     loss_vals.append(loss.item())
 plt.plot(loss_vals)
+plt.title('L1 loss')
+plt.xlabel('Batches of 1000 points')
+plt.ylabel('Loss')
 
 ##
 model.eval()
@@ -59,4 +64,6 @@ x = torch.randn((1000,1), dtype=torch.cfloat)
 y = model(x)
 plt.plot([z.real for z in x], [z.real for z in y], 'ro')
 plt.plot([z.imag for z in x], [z.imag for z in y], 'bo')
+plt.title('Model')
+plt.legend(labels=['Real', 'Imaginary'])
 
