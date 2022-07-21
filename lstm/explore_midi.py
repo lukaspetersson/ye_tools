@@ -154,6 +154,20 @@ print(sorted(Counter(durations["chord"]).items(), key=lambda x: -x[1]))
 print("Rest durations")
 print(sorted(Counter(durations["rest"]).items(), key=lambda x: -x[1]))
 
+##
+import signal
+
+class timeout:
+    def __init__(self, seconds=1, error_message='Timeout'):
+        self.seconds = seconds
+        self.error_message = error_message
+    def handle_timeout(self, signum, frame):
+        raise TimeoutError(self.error_message)
+    def __enter__(self):
+        signal.signal(signal.SIGALRM, self.handle_timeout)
+        signal.alarm(self.seconds)
+    def __exit__(self, type, value, traceback):
+        signal.alarm(0)
 
 ##
 # One song object has many part objects
@@ -228,8 +242,8 @@ Other ways to encode the part, not in use
 class Song():
     def __init__(self, path, transpose=True):
         try:
-            #TODO: timeout if reading takes more than a second
-            self.score = m21.converter.parse(path)
+            with timeout(seconds=2):
+                self.score = m21.converter.parse(path)
             if transpose:
                 #TODO: different parts have different keys, but they shouldnt
                 #TODO: too slow to transpose all songs
@@ -239,7 +253,7 @@ class Song():
                 self.score = self.score.transpose(i)
 
             self.parts = [Part(part) for part in self.score.parts]
-        except m21.midi.MidiException:
+        except:
             self.parts = []
 
         self.excluded_parts = set()
@@ -346,8 +360,10 @@ print(time.time()-t0)
 # Build dataset as list of parts
 # TODO: loses info that parts can share properties if they are from the same song
 vecs = []
-for i, file in enumerate(glob.glob("data/lmd_full/0/**/*.mid", recursive=True)):
-    if i > 10: break
+for i, file in enumerate(glob.glob("data/lmd_full/**/*.mid", recursive=True)):
+    if i%100 == 0 and i > 0:
+        np.save("data/data_big_"+str(i)+".npy", np.asarray(vecs), allow_pickle=True)
+        vecs = []
     song = Song(file, transpose=False)
     # same filters as in test above
     song.filter_notes(lambda note: not (0.25 <= float(note.duration.quarterLength) <= 4))
@@ -356,13 +372,11 @@ for i, file in enumerate(glob.glob("data/lmd_full/0/**/*.mid", recursive=True)):
     song.part_exclusion(lambda part: np.std([int(note.pitch.midi) for note in part.notes]) < 2)
 
     vecs += song.as_vector()
-np.save("data/data_small.npy", np.asarray(vecs), allow_pickle=True)
-print(len(vecs))
 
 ##
 # Test loading dataset
 # TODO: many parts are boaring, just repeating same note
-vec = np.load("data/data_small.npy", allow_pickle=True)
+vec = np.load("data/data_big_100.npy", allow_pickle=True)
 print(vec)
 
 ##
