@@ -6,6 +6,8 @@ import glob
 import time
 import os
 import matplotlib.pyplot as plt
+import random
+from scipy.stats import pearsonr, spearmanr
 
 ##
 score = m21.converter.parse("data/lmd_full/a/a00b0f5acc0fd4e4fc9f32830d61978d.mid")
@@ -375,16 +377,17 @@ for i, file in enumerate(glob.glob("data/lmd_full/**/*.mid", recursive=True)):
 
 ##
 # Test loading dataset
-# TODO: many parts are boaring, just repeating same note
-vec = np.load("data/data_big_100.npy", allow_pickle=True)
-print(vec)
+data = np.array(np.concatenate([np.load('data/data_big_'+str(i*100)+'.npy', allow_pickle=True) for i in range(1,45)]))
+data = np.transpose(np.concatenate(data))
+print(len(data[0]))
 
 ##
-
-data = np.transpose(np.concatenate(vec))
-plt.plot(data[0], data[1], 'o')
+plt.hist2d(data[1], data[0], bins=20)
+cb = plt.colorbar()
+cb.set_label('Number of notes')
+plt.title('2D histogram of notes')
+plt.xlabel('Duration')
+plt.ylabel('Pitch')
 
 ##
-cov_mat = np.stack((data[0], data[1]), axis = 0)
-
-print(np.cov(cov_mat))
+spearmanr(data[1], data[0])[0]
