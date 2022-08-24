@@ -4,14 +4,19 @@ import tqdm
 import torch
 from torch import nn, optim
 import torch.nn as nn
+import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 
 torch.manual_seed(1)
+
+SEQ_LEN = 5
 
 ##
 class Dataset(torch.utils.data.Dataset):
     def __init__(self, data_dir, seq_len=SEQ_LEN):
         self.data = np.load(data_dir, allow_pickle=True)
+        #self.data = np.array(np.concatenate([np.load('data/data_big_'+str(i*100)+'.npy', allow_pickle=True) for i in range(1,data_size)]))
+
         self.seq_len = seq_len
 
     def data_in_part(self, part):
@@ -40,8 +45,8 @@ class Dataset(torch.utils.data.Dataset):
             else:
                 idx -= num_datapoints
         #TODO: must be float?
-        x = torch.tensor(part[idx:idx+self.seq_len], dtype=torch.int8)
-        y = torch.tensor(part[idx+1:idx+self.seq_len+1], dtype=torch.int8)
+        x = torch.tensor(part[idx:idx+self.seq_len], dtype=torch.float32)
+        y = torch.tensor(part[idx+1:idx+self.seq_len+1], dtype=torch.float32)
         return (x, y)
 
 ##
@@ -59,21 +64,21 @@ class LstmModel(nn.Module):
         return pred, state
 
 ##
-def train(dataset, model):
+def train(dataset, model, num_epochs):
     model.train()
+    loss_vals = []
 
     dataloader = DataLoader(dataset, batch_size=64)
     loss_fn = nn.CrossEntropyLoss()
-    #TODO: quasi newton?
     opt = optim.Adam(model.parameters(), lr=0.001)
 
-    for epoch in range(2):
-        h_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.int8)
-        c_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.int8)
+    for epoch in range(num_epochs):
+        epoch_loss = []
 
+        h_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.float32)
+        c_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.float32)
         for x, y in dataloader:
             opt.zero_grad()
-            print(x)
             y_pred, (h_t, c_t) = model(x, (h_t, c_t))
             loss = loss_fn(y_pred, y)
 
@@ -82,11 +87,25 @@ def train(dataset, model):
 
             loss.backward()
             opt.step()
+            epoch_loss.append(loss.item())
+        loss_vals.append(sum(epoch_loss)/len(epoch_loss))
+    plt.plot(np.linspace(1, num_epochs, num_epochs).astype(int), loss_vals)
+    plt.title("L1 loss")
 ##
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-model = LstmModel().to(device)
+torch.cuda.is_available()
+##
+model = LstmModel()
 dataset = Dataset("data/data_small.npy", SEQ_LEN)
-train(dataset, model)
+train(dataset, model, 1)
+
+##
+model.eval()
+h_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.float32)
+c_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.float32)
+x = torch.unsqueeze(torch.tensor([[65,2], [65,1], [70,4], [63,2], [68,8]], dtype=torch.float32), dim=0)
+y_pred, (h_t, c_t) = model(x, (h_t, c_t))
+y_pred
+
 ##
 def predict(dataset, model, text, next_words=100):
     model.eval()
