@@ -79,8 +79,8 @@ def train(dataset, model, num_epochs):
         c_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.float32)
         for x, y in dataloader:
             opt.zero_grad()
-            y_pred, (h_t, c_t) = model(x, (h_t, c_t))
-            loss = loss_fn(y_pred, y)
+            y_pred, (h_t, c_t) = model(x.cuda(), (h_t.cuda(), c_t.cuda()))
+            loss = loss_fn(y_pred.cuda(), y.cuda())
 
             h_t = h_t.detach()
             c_t = c_t.detach()
@@ -92,11 +92,9 @@ def train(dataset, model, num_epochs):
     plt.plot(np.linspace(1, num_epochs, num_epochs).astype(int), loss_vals)
     plt.title("L1 loss")
 ##
-torch.cuda.is_available()
-##
-model = LstmModel()
+model = LstmModel().cuda()
 dataset = Dataset("data/data_small.npy", SEQ_LEN)
-train(dataset, model, 1)
+train(dataset, model, 4)
 
 ##
 model.eval()
