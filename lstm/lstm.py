@@ -9,7 +9,7 @@ from torch.utils.data import DataLoader
 
 torch.manual_seed(1)
 
-SEQ_LEN = 5
+SEQ_LEN = 10
 
 ##
 class Dataset(torch.utils.data.Dataset):
@@ -44,10 +44,11 @@ class Dataset(torch.utils.data.Dataset):
                 break
             else:
                 idx -= num_datapoints
-        #TODO: must be float?
         x = torch.tensor(part[idx:idx+self.seq_len], dtype=torch.float32)
         y = torch.tensor(part[idx+1:idx+self.seq_len+1], dtype=torch.float32)
         return (x, y)
+##
+device = "cuda"
 
 ##
 class LstmModel(nn.Module):
@@ -55,21 +56,25 @@ class LstmModel(nn.Module):
         super(LstmModel, self).__init__()
         self.hidden_dim = hidden_dim
         self.num_layers = num_layers
-        self.lstm = nn.LSTM(2, self.hidden_dim, num_layers=self.num_layers, dropout=0.1)
+        self.lstm = nn.LSTM(
+                input_size=2,
+                hidden_size=self.hidden_dim,
+                num_layers=self.num_layers,
+                dropout=0.1)
         self.linear = nn.Linear(self.hidden_dim, 2)
 
     def forward(self, x, prev_state):
         output, state = self.lstm(x, prev_state)
         pred = self.linear(output)
         return pred, state
-
 ##
+
 def train(dataset, model, num_epochs):
     model.train()
     loss_vals = []
 
-    dataloader = DataLoader(dataset, batch_size=64)
-    loss_fn = nn.CrossEntropyLoss()
+    dataloader = DataLoader(dataset, batch_size=1)
+    loss_fn = nn.MSELoss()
     opt = optim.Adam(model.parameters(), lr=0.001)
 
     for epoch in range(num_epochs):
@@ -79,8 +84,8 @@ def train(dataset, model, num_epochs):
         c_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.float32)
         for x, y in dataloader:
             opt.zero_grad()
-            y_pred, (h_t, c_t) = model(x.cuda(), (h_t.cuda(), c_t.cuda()))
-            loss = loss_fn(y_pred.cuda(), y.cuda())
+            y_pred, (h_t, c_t) = model(x.to(device=device), (h_t.to(device=device), c_t.to(device=device)))
+            loss = loss_fn(y_pred.to(device=device), y.to(device=device))
 
             h_t = h_t.detach()
             c_t = c_t.detach()
@@ -90,21 +95,24 @@ def train(dataset, model, num_epochs):
             epoch_loss.append(loss.item())
         loss_vals.append(sum(epoch_loss)/len(epoch_loss))
     plt.plot(np.linspace(1, num_epochs, num_epochs).astype(int), loss_vals)
-    plt.title("L1 loss")
+    plt.title("RMSE loss")
+    plt.ticklabel_format(useOffset=False)
+
 ##
-model = LstmModel().cuda()
+model = LstmModel().to(device=device)
 dataset = Dataset("data/data_small.npy", SEQ_LEN)
-train(dataset, model, 4)
+train(dataset, model, 3)
 
 ##
 model.eval()
-h_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.float32)
-c_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.float32)
-x = torch.unsqueeze(torch.tensor([[65,2], [65,1], [70,4], [63,2], [68,8]], dtype=torch.float32), dim=0)
+h_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.float32).to(device=device)
+c_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim, dtype=torch.float32).to(device=device)
+x = torch.tensor([[[65,2], [65,1], [70,4], [63,2], [68,8]]], dtype=torch.float32).to(device=device)
 y_pred, (h_t, c_t) = model(x, (h_t, c_t))
 y_pred
 
 ##
+#TODO
 def predict(dataset, model, text, next_words=100):
     model.eval()
 
