@@ -137,3 +137,5 @@ dmypy.json
 rnn_beat/songs/
 rnn_beat/training_checkpoints/
 lstm/data/
+lstm/models/
+lstm/runs/
