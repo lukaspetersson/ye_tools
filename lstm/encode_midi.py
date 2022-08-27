@@ -253,10 +253,10 @@ def decode_midi(idx_array, file_path=None):
     return mid
 
 if __name__ == '__main__':
-    encoded = encode_midi('../lstm/data/adl-piano-midi/lmd_full/0/00000ec8a66b6bd2ef809b0443eeae41.mid')
+    encoded = encode_midi('../../Downloads/twinkle-twinkle-little-star.mid')
     print(encoded)
     #decided = decode_midi(encoded, file_path='bin/test.mid')
-    #exit()
+    exit()
     ins = pretty_midi.PrettyMIDI('../lstm/data/adl-piano-midi/lmd_full/0/00000ec8a66b6bd2ef809b0443eeae41.mid')
     print(ins)
     print(ins.instruments[0])

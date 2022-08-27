@@ -244,7 +244,7 @@ Other ways to encode the part, not in use
 class Song():
     def __init__(self, path, transpose=True):
         try:
-            with timeout(seconds=2):
+            with timeout(seconds=59):
                 self.score = m21.converter.parse(path)
             if transpose:
                 #TODO: different parts have different keys, but they shouldnt
@@ -391,3 +391,7 @@ plt.ylabel('Pitch')
 
 ##
 spearmanr(data[1], data[0])[0]
+
+##
+twinkle = Song('../../Downloads/twinkle-twinkle-little-star.mid', transpose=False)
+np.save("data/twinkle_note_based.npy", np.asarray(twinkle.as_vector()), allow_pickle=True)
