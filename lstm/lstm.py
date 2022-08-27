@@ -12,13 +12,14 @@ from torch.utils.data import DataLoader
 import torch.nn.functional as F
 import encode_midi as event_utils
 import music21 as m21
+from torch.utils.tensorboard import SummaryWriter
 
 torch.manual_seed(1)
-
+device = "cuda"
+writer = SummaryWriter()
 SEQ_LEN = 15
 
 ##
-
 class DatasetEventBased(torch.utils.data.Dataset):
     def __init__(self, file_paths, seq_len):
         def f(fp):
@@ -55,8 +56,8 @@ class DatasetEventBased(torch.utils.data.Dataset):
                 break
             else:
                 idx -= num_datapoints
-        x = F.one_hot(torch.tensor(part[idx:idx+self.seq_len]), num_classes=356).float()
-        y = F.one_hot(torch.tensor(part[idx+1:idx+self.seq_len+1]), num_classes=356).float()
+        x = F.one_hot(torch.tensor(part[idx:idx+self.seq_len]), num_classes=356).float().to(device)
+        y = F.one_hot(torch.tensor(part[idx+1:idx+self.seq_len+1]), num_classes=356).float().to(device)
         return (x, y)
 
 ##
@@ -92,11 +93,9 @@ class DatasetNoteBased(torch.utils.data.Dataset):
                 break
             else:
                 idx -= num_datapoints
-        x = torch.tensor(part[idx:idx+self.seq_len], dtype=torch.float32)
-        y = torch.tensor(part[idx+1:idx+self.seq_len+1], dtype=torch.float32)
+        x = torch.tensor(part[idx:idx+self.seq_len], dtype=torch.float32).to(device)
+        y = torch.tensor(part[idx+1:idx+self.seq_len+1], dtype=torch.float32).to(device)
         return (x, y)
-##
-device = "cuda"
 
 ##
 class LstmModel(nn.Module):
@@ -127,12 +126,13 @@ def train(dataset, model, num_epochs, loss_fn):
     for epoch in range(num_epochs):
         epoch_loss = []
 
-        h_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim)
-        c_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim)
+        h_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim).to(device)
+        c_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim).to(device)
         for x, y in dataloader:
             opt.zero_grad()
-            y_pred, (h_t, c_t) = model(x.to(device=device), (h_t.to(device=device), c_t.to(device=device)))
-            loss = loss_fn(y_pred.to(device=device), y.to(device=device))
+            y_pred, (h_t, c_t) = model(x, (h_t, c_t))
+            loss = loss_fn(y_pred, y)
+            writer.add_scalar("Loss", loss, epoch)
 
             h_t = h_t.detach()
             c_t = c_t.detach()
@@ -147,34 +147,44 @@ def train(dataset, model, num_epochs, loss_fn):
 
 ##
 t0=time.time()
-model_event = LstmModel(input_dim=356).to(device=device)
-dataset_event = DatasetEventBased(file_paths=list(glob.glob('data/lmd_full/**/*.mid', recursive=True))[:400], seq_len=SEQ_LEN*5)
+model_event = LstmModel(input_dim=356).to(device)
+dataset_event = DatasetEventBased(file_paths=list(glob.glob('data/lmd_full/**/*.mid', recursive=True))[:1], seq_len=SEQ_LEN*5)
 print(time.time()-t0)
-len(dataset_event1)
+len(dataset_event)
+
 ##
 t0=time.time()
 train(dataset_event, model_event, 5, nn.CrossEntropyLoss())
+writer.flush()
 print(time.time()-t0)
 
 ##
-model_note = LstmModel(input_dim=2).to(device=device)
+model_note = LstmModel(input_dim=2).to(device)
 dataset_note = DatasetNoteBased('data/data_big_100.npy', SEQ_LEN)
 train(dataset_note, model_note, 3, nn.MSELoss())
 
 ##
-model_event.eval()
-h_t = torch.zeros(model_event.num_layers, dataset_event.seq_len, model_event.hidden_dim).to(device=device)
-c_t = torch.zeros(model_event.num_layers, dataset_event.seq_len, model_event.hidden_dim).to(device=device)
-x = torch.unsqueeze(dataset_event[1500][0].to(device=device), dim=0)
+model_loaded.eval()
+h_t = torch.zeros(model_event.num_layers, dataset_event.seq_len, model_event.hidden_dim).to(device)
+c_t = torch.zeros(model_event.num_layers, dataset_event.seq_len, model_event.hidden_dim).to(device)
+x = torch.unsqueeze(dataset_event[1500][0].to(device), dim=0)
 
-y_pred, state = model_event(x, (h_t, c_t))
+y_pred, state = model_loaded(x, (h_t, c_t))
 y_pred[0][-1]
 
 ##
+model_path = 'models/event.pth'
+torch.save(model_event.state_dict(), model_path)
+
+##
+model_loaded = LstmModel(input_dim=356).to(device)
+model_loaded.load_state_dict(torch.load(model_path))
+
+##
 model_note.eval()
-h_t = torch.zeros(model_note.num_layers, dataset_note.seq_len, model_note.hidden_dim).to(device=device)
-c_t = torch.zeros(model_note.num_layers, dataset_note.seq_len, model_note.hidden_dim).to(device=device)
-x = torch.unsqueeze(dataset_note[1500][0].to(device=device), dim=0)
+h_t = torch.zeros(model_note.num_layers, dataset_note.seq_len, model_note.hidden_dim).to(device)
+c_t = torch.zeros(model_note.num_layers, dataset_note.seq_len, model_note.hidden_dim).to(device)
+x = torch.unsqueeze(dataset_note[1500][0].to(device), dim=0)
 
 y_pred, state = model_note(x, (h_t, c_t))
 y_pred[0][-1]
@@ -183,9 +193,9 @@ y_pred[0][-1]
 def generate(model, start, song_len, seq_len):
     model.eval()
     start_len = len(start)
-    seq = torch.cat((start, torch.zeros(song_len-start_len, model.input_dim, dtype=torch.float))).to(device=device)
-    h_t = torch.zeros(model.num_layers, seq_len, model.hidden_dim).to(device=device)
-    c_t = torch.zeros(model.num_layers, seq_len, model.hidden_dim).to(device=device)
+    seq = torch.cat((start, torch.zeros(song_len-start_len, model.input_dim, dtype=torch.float))).to(device)
+    h_t = torch.zeros(model.num_layers, seq_len, model.hidden_dim).to(device)
+    c_t = torch.zeros(model.num_layers, seq_len, model.hidden_dim).to(device)
     for i in range(start_len, song_len):
         x = torch.unsqueeze(seq[i-seq_len:i], dim=0)
         y, (h_t, c_t) = model(x, (h_t, c_t))
