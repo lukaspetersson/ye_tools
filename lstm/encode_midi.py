@@ -115,10 +115,15 @@ def _merge_note(snote_sequence):
                 off = snote
                 if off.time - on.time == 0:
                     continue
-                result = pretty_midi.Note(on.velocity, snote.value, on.time, off.time)
+                result = pretty_midi.Note(60, snote.value, on.time, off.time)
                 result_array.append(result)
+                del note_on_dict[snote.value]
             except:
                 print('info removed pitch: {}'.format(snote.value))
+    for value, note in note_on_dict.items():
+        result = pretty_midi.Note(100, value, note.time, note.time+0.5)
+        result_array.append(result)
+
     return result_array
 
 
@@ -237,7 +242,6 @@ def encode_midi(file_path):
 
 def decode_midi(idx_array, file_path=None):
     event_sequence = [Event.from_int(idx) for idx in idx_array]
-    # print(event_sequence)
     snote_seq = _event_seq2snote_seq(event_sequence)
     note_seq = _merge_note(snote_seq)
     note_seq.sort(key=lambda x:x.start)
@@ -254,12 +258,11 @@ def decode_midi(idx_array, file_path=None):
 
 if __name__ == '__main__':
     encoded = encode_midi('../../Downloads/twinkle-twinkle-little-star.mid')
-    print(encoded)
-    #decided = decode_midi(encoded, file_path='bin/test.mid')
-    exit()
-    ins = pretty_midi.PrettyMIDI('../lstm/data/adl-piano-midi/lmd_full/0/00000ec8a66b6bd2ef809b0443eeae41.mid')
-    print(ins)
-    print(ins.instruments[0])
+    #print(encoded)
+    decided = decode_midi(encoded, file_path='test1.mid')
+    ins = pretty_midi.PrettyMIDI('test1.mid')
+    #print(ins)
+    #print(ins.instruments[0])
     for i in ins.instruments:
         print(i.control_changes)
         print(i.notes)

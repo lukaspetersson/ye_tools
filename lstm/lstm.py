@@ -1,4 +1,6 @@
 ##
+import time
+import tempfile
 import numpy as np
 import glob
 import tqdm
@@ -8,17 +10,24 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
-from encode_midi import *
+import encode_midi as event_utils
+import music21 as m21
 
 torch.manual_seed(1)
 
-SEQ_LEN = 10
+SEQ_LEN = 15
 
 ##
 
 class DatasetEventBased(torch.utils.data.Dataset):
     def __init__(self, file_paths, seq_len):
-        self.data = [encode_midi(file_path) for file_path in file_paths] 
+        def f(fp):
+            try:
+                return list(filter(lambda x: x<356, event_utils.encode_midi(fp)))
+            except:
+                return []
+
+        self.data = [f(file_path) for file_path in file_paths] 
         self.seq_len = seq_len 
 
     def data_in_part(self, part):
@@ -46,8 +55,8 @@ class DatasetEventBased(torch.utils.data.Dataset):
                 break
             else:
                 idx -= num_datapoints
-        x = F.one_hot(torch.tensor(part[idx:idx+self.seq_len]), num_classes=388).float()
-        y = F.one_hot(torch.tensor(part[idx+1:idx+self.seq_len+1]), num_classes=388).float()
+        x = F.one_hot(torch.tensor(part[idx:idx+self.seq_len]), num_classes=356).float()
+        y = F.one_hot(torch.tensor(part[idx+1:idx+self.seq_len+1]), num_classes=356).float()
         return (x, y)
 
 ##
@@ -91,7 +100,7 @@ device = "cuda"
 
 ##
 class LstmModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim=10, num_layers=2):
+    def __init__(self, input_dim, hidden_dim=20, num_layers=2):
         super(LstmModel, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -113,7 +122,7 @@ def train(dataset, model, num_epochs, loss_fn):
     loss_vals = []
 
     dataloader = DataLoader(dataset, batch_size=64)
-    opt = optim.Adam(model.parameters(), lr=0.001)
+    opt = optim.Adam(model.parameters(), lr=0.05)
 
     for epoch in range(num_epochs):
         epoch_loss = []
@@ -137,9 +146,15 @@ def train(dataset, model, num_epochs, loss_fn):
     plt.ticklabel_format(useOffset=False)
 
 ##
-model_event = LstmModel(input_dim=388).to(device=device)
-dataset_event = DatasetEventBased(file_paths=list(glob.glob('data/lmd_full/0/*.mid', recursive=True))[:1], seq_len=SEQ_LEN*10)
-train(dataset_event, model_event, 3, nn.CrossEntropyLoss())
+t0=time.time()
+model_event = LstmModel(input_dim=356).to(device=device)
+dataset_event = DatasetEventBased(file_paths=list(glob.glob('data/lmd_full/**/*.mid', recursive=True))[:400], seq_len=SEQ_LEN*5)
+print(time.time()-t0)
+len(dataset_event1)
+##
+t0=time.time()
+train(dataset_event, model_event, 5, nn.CrossEntropyLoss())
+print(time.time()-t0)
 
 ##
 model_note = LstmModel(input_dim=2).to(device=device)
@@ -179,37 +194,35 @@ def generate(model, start, song_len, seq_len):
 
 ##
 
-def to_m21_note_based(note):
-    return m21.note.Note(pitch=round(note[0].item()), duration=m21.duration.Duration(round(note[1].item()/4)))
-
-def to_m21_event_based(note):
-    return None
-
-def to_stream_note_based(seq, to_m21_func):
+def to_stream_note_based(seq):
     stream = m21.stream.Stream()
     for note in seq:
-        stream.append(to_m21_func(note))
+        note_m21 = m21.note.Note(pitch=round(note[0].item()), duration=m21.duration.Duration(round(note[1].item()/4)))
+        stream.append(note_m21)
     return stream
 
 ##
 start = torch.tensor(np.load('data/twinkle_note_based.npy', allow_pickle=True)[0][:16], dtype=torch.float)
 seq_note_based = generate(model_note, start, 30, SEQ_LEN)
-stream = to_stream_note_based(seq_note_based, to_m21_note_based)
+stream = to_stream_note_based(seq_note_based)
 stream.show()
 
 ##
-start = F.one_hot(torch.tensor([375, 60, 371, 52, 372, 48, 315, 188, 258, 376, 60, 312, 180, 176, 258, 188, 258, 378, 67, 375, 60, 373, 48, 315, 195, 258, 377, 67, 312, 188, 176, 258, 195, 258, 377, 69, 374, 60, 372, 41, 315, 197, 258, 376, 69, 312, 188, 169, 258, 197, 258, 376, 67, 374, 60, 373, 48, 355, 275, 195, 188, 176, 261, 376, 65, 373, 57, 373, 41, 315, 193, 258, 377, 65, 312, 185, 169, 258, 193, 258, 376, 64, 373, 55, 375, 48, 315, 192, 258, 377, 64, 312, 183, 176, 258, 192, 258, 376, 62, 373, 55, 373, 43, 315, 190, 258, 376, 62, 312, 183, 171, 258, 190, 258, 376, 60, 373, 52, 374, 48, 355, 275, 188, 180, 176, 261, 379, 67, 376, 60, 374, 48, 315, 195, 258, 376, 67, 312, 188, 176, 258, 195, 258, 376, 65, 373, 57, 373, 41, 315, 193, 258, 377, 65, 312, 185, 169, 258, 193, 258, 376]), num_classes=388).float()
-#seq_event_based = generate(model_event, start, 30*10, SEQ_LEN*10)
-#stream = to_stream_note_based(seq_note_based, to_m21_event_based)
-#stream.show()
 
-def decode_midi(idx_array, file_path=None):
-    event_sequence = [Event.from_int(idx) for idx in idx_array]
-    # print(event_sequence)
-    snote_seq = _event_seq2snote_seq(event_sequence)
-    note_seq = _merge_note(snote_seq)
-    note_seq.sort(key=lambda x:x.start)
-    print(note_seq)
+def to_stream_event_based(seq):
+    seq = [torch.argmax(oh).item() for oh in seq]
+    tmp_mid = tempfile.NamedTemporaryFile(suffix='.mid')
+    tmp_mid = 'twinkle_event.mid'
+    event_utils.decode_midi(seq, tmp_mid)
+    return m21.converter.parse(tmp_mid)
+
 ##
-decode_midi(start)
+start = [375, 60, 371, 52, 372, 48, 315, 188, 258, 376, 60, 312, 180, 176, 258, 188, 258, 378, 67, 375, 60, 373, 48, 315, 195, 258, 377, 67, 312, 188, 176, 258, 195, 258, 377, 69, 374, 60, 372, 41, 315, 197, 258, 376, 69, 312, 188, 169, 258, 197, 258, 376, 67, 374, 60, 373, 48, 355, 275, 195, 188, 176, 261, 376, 65, 373, 57, 373, 41, 315, 193, 258, 377, 65, 312, 185, 169, 258, 193, 258, 376, 64, 373, 55, 375, 48, 315, 192, 258, 377, 64, 312, 183, 176, 258, 192, 258, 376, 62, 373, 55, 373, 43, 315, 190, 258, 376, 62, 312, 183, 171, 258, 190, 258, 376, 60, 373, 52, 374, 48, 355, 275, 188, 180, 176, 261, 379, 67, 376, 60, 374, 48, 315, 195, 258, 376, 67, 312, 188, 176, 258, 195, 258, 376, 65, 373, 57, 373, 41, 315, 193, 258, 377, 65, 312, 185, 169, 258, 193, 258, 376]
+start = list(filter(lambda x: x<356, start))
+start = F.one_hot(torch.tensor(start), num_classes=356).float()
+seq_event_based = generate(model_event, start, 60*5, SEQ_LEN*5)
+stream = to_stream_event_based(seq_event_based)
+
+stream.parts[0].show()
+
 
