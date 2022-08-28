@@ -16,8 +16,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 torch.manual_seed(1)
 device = "cuda"
-writer = SummaryWriter()
-SEQ_LEN = 15
+SEQ_LEN = 25
 
 ##
 class DatasetEventBased(torch.utils.data.Dataset):
@@ -63,8 +62,8 @@ class DatasetEventBased(torch.utils.data.Dataset):
 ##
 class DatasetNoteBased(torch.utils.data.Dataset):
     def __init__(self, data_dir, seq_len=SEQ_LEN):
-        self.data = np.load(data_dir, allow_pickle=True)
-        #self.data = np.array(np.concatenate([np.load('data/data_big_'+str(i*100)+'.npy', allow_pickle=True) for i in range(1,data_size)]))
+        #self.data = np.load(data_dir, allow_pickle=True)
+        self.data = np.array(np.concatenate([np.load('data/data_big_'+str(i*100)+'.npy', allow_pickle=True) for i in range(1,50)]))
 
         self.seq_len = seq_len
 
@@ -99,7 +98,7 @@ class DatasetNoteBased(torch.utils.data.Dataset):
 
 ##
 class LstmModel(nn.Module):
-    def __init__(self, input_dim, hidden_dim=20, num_layers=2):
+    def __init__(self, input_dim, hidden_dim=20, num_layers=1):
         super(LstmModel, self).__init__()
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -107,8 +106,7 @@ class LstmModel(nn.Module):
         self.lstm = nn.LSTM(
                 input_size=input_dim,
                 hidden_size=self.hidden_dim,
-                num_layers=self.num_layers,
-                dropout=0.1)
+                num_layers=self.num_layers)
         self.linear = nn.Linear(self.hidden_dim, input_dim)
 
     def forward(self, x, prev_state):
@@ -120,8 +118,8 @@ def train(dataset, model, num_epochs, loss_fn):
     model.train()
     loss_vals = []
 
-    dataloader = DataLoader(dataset, batch_size=64)
-    opt = optim.Adam(model.parameters(), lr=0.05)
+    dataloader = DataLoader(dataset, batch_size=1024)
+    opt = optim.SGD(model.parameters(), lr=0.01, momentum=0.8)
 
     for epoch in range(num_epochs):
         epoch_loss = []
@@ -159,9 +157,26 @@ writer.flush()
 print(time.time()-t0)
 
 ##
+dataset_note = DatasetNoteBased(SEQ_LEN)
+##
 model_note = LstmModel(input_dim=2).to(device)
-dataset_note = DatasetNoteBased('data/data_big_100.npy', SEQ_LEN)
-train(dataset_note, model_note, 3, nn.MSELoss())
+t0=time.time()
+train(dataset_note, model_note, 5, nn.MSELoss())
+print(time.time()-t0)
+model_path = 'models/big_note_5.pth'
+torch.save(model_note.state_dict(), model_path)
+model_note = LstmModel(input_dim=2).to(device)
+t0=time.time()
+train(dataset_note, model_note, 50, nn.MSELoss())
+print(time.time()-t0)
+model_path = 'models/big_note_50.pth'
+torch.save(model_note.state_dict(), model_path)
+model_note = LstmModel(input_dim=2).to(device)
+t0=time.time()
+train(dataset_note, model_note, 200, nn.MSELoss())
+print(time.time()-t0)
+model_path = 'models/big_note_200.pth'
+torch.save(model_note.state_dict(), model_path)
 
 ##
 model_loaded.eval()
@@ -173,8 +188,8 @@ y_pred, state = model_loaded(x, (h_t, c_t))
 y_pred[0][-1]
 
 ##
-model_path = 'models/event.pth'
-torch.save(model_event.state_dict(), model_path)
+model_path = 'models/big_note.pth'
+torch.save(model_note.state_dict(), model_path)
 
 ##
 model_loaded = LstmModel(input_dim=356).to(device)

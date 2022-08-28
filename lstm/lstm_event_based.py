@@ -1,4 +1,5 @@
 import time
+import encode_midi as event_utils
 import tempfile
 import numpy as np
 import glob
@@ -14,24 +15,28 @@ from torch.utils.tensorboard import SummaryWriter
 from itertools import product
 
 torch.manual_seed(1)
-device = "cuda"
+device = "cpu"
 
-SEQ_LENS = [30]
+SEQ_LENS = [20, 100]
 PARAMETERS = dict(
     batch_size = [1024],
-    lr = [0.01],
-    lstm_layers = [1],
-    lstm_hidden_dim = [20],
-    optimizer = ['sgd'],
-    momentum = [1, 0.9, 0.6],
+    lr = [0.01, 0.001],
+    lstm_layers = [1, 2],
+    lstm_hidden_dim = [10, 30],
+    optimizer = ['sgd', 'adam'],
     dropout = [0.2, 0]
 )
 
-class DatasetNoteBased(torch.utils.data.Dataset):
-    def __init__(self, seq_len):
-        self.data = np.array(np.concatenate([np.load('data/data_big_'+str(i*100)+'.npy', allow_pickle=True) for i in range(1,5)]))
+class DatasetEventBased(torch.utils.data.Dataset):
+    def __init__(self, file_paths, seq_len):
+        def f(fp):
+            try:
+                return list(filter(lambda x: x<356, event_utils.encode_midi(fp)))
+            except:
+                return []
 
-        self.seq_len = seq_len
+        self.data = [f(file_path) for file_path in file_paths] 
+        self.seq_len = seq_len 
 
     def data_in_part(self, part):
         return len(part) - (self.seq_len + 1)
@@ -58,8 +63,8 @@ class DatasetNoteBased(torch.utils.data.Dataset):
                 break
             else:
                 idx -= num_datapoints
-        x = torch.tensor(part[idx:idx+self.seq_len], dtype=torch.float32).to(device)
-        y = torch.tensor(part[idx+1:idx+self.seq_len+1], dtype=torch.float32).to(device)
+        x = F.one_hot(torch.tensor(part[idx:idx+self.seq_len]), num_classes=356).float().to(device)
+        y = F.one_hot(torch.tensor(part[idx+1:idx+self.seq_len+1]), num_classes=356).float().to(device)
         return (x, y)
 
 class LstmModel(nn.Module):
@@ -102,27 +107,26 @@ def train(dataset, model, num_epochs, loss_fn, opt, batch_size, writer):
             opt.step()
     return total_loss
 
-params = [()]
 model_id = 0
 for seq_len in SEQ_LENS:
     print("seq len", seq_len)
-    dataset = DatasetNoteBased(seq_len)
+    dataset = DatasetEventBased(file_paths=list(glob.glob('data/lmd_full/**/*.mid', recursive=True))[:5], seq_len=seq_len)
     print("len dataset: ", len(dataset))
-    for batch_size, lr, lstm_layers, lstm_hidden_dim, optimizer, momentum ,dropout in product(*[v for v in PARAMETERS.values()]): 
+    for batch_size, lr, lstm_layers, lstm_hidden_dim, optimizer, dropout in product(*[v for v in PARAMETERS.values()]): 
         comment = f' seq_len = {seq_len}, batch_size = {batch_size}, lr = {lr}, layers = {lstm_layers}, hidden_dim = {lstm_hidden_dim}, optimizer = {optimizer}, dropout = {dropout}, model_id = {model_id}'
         print(comment)
-        writer = SummaryWriter('runs/sun5', comment=comment)
-        model = LstmModel(2, lstm_hidden_dim, lstm_layers, dropout).to(device)
+        writer = SummaryWriter('runs/event1', comment=comment)
+        model = LstmModel(356, lstm_hidden_dim, lstm_layers, dropout).to(device)
         if optimizer == 'adam':
             opt = optim.Adam(model.parameters(), lr=lr)
         elif optimizer == 'sgd':
-            opt = optim.SGD(model.parameters(), lr=lr, momentum=momentum)
+            opt = optim.SGD(model.parameters(), lr=lr, momentum=0.8)
         t0 = time.time()
-        total_loss = train(dataset, model, 4, nn.MSELoss(), opt, batch_size, writer)
+        total_loss = train(dataset, model, 2, nn.CrossEntropyLoss(), opt, batch_size, writer)
         train_time = time.time()-t0
-        writer.add_hparams(dict(momentum=momentum, seq_len=seq_len, batch_size=batch_size, lr=lr, lstm_layers=lstm_layers, lstm_hidden_dim=lstm_hidden_dim, optimizer=optimizer, dropout=dropout), dict(loss=total_loss, train_time=train_time))
+        writer.add_hparams(dict(seq_len=seq_len, batch_size=batch_size, lr=lr, lstm_layers=lstm_layers, lstm_hidden_dim=lstm_hidden_dim, optimizer=optimizer, dropout=dropout), dict(loss=total_loss, train_time=train_time))
         writer.flush()
         writer.close()
-        torch.save(model.state_dict(), 'models/note_based_'+str(model_id)+'_'+time.strftime("%m-%d")+'.pth')
+        torch.save(model.state_dict(), 'models/event_based_'+str(model_id)+'_'+time.strftime("%m-%d")+'.pth')
         print("model saved")
         model_id += 1
