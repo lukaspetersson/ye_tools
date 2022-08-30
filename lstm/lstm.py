@@ -117,23 +117,24 @@ class LstmModel(nn.Module):
         pred = self.linear(output)
         return pred, state
 ##
-def train(dataset, model, num_epochs, loss_fn):
+def train(dataset, model, num_epochs, loss_fn, opt=None, batch_size=128, writer):
+    if not opt:
+        opt = optim.SGD(model.parameters(), lr=0.005)
     model.train()
+    dataloader = DataLoader(dataset, batch_size=batch_size)
+
     loss_vals = []
-
-    dataloader = DataLoader(dataset, batch_size=128)
-    #opt = optim.Adam(model.parameters(), lr=0.005)
-    opt = optim.SGD(model.parameters(), lr=0.005, momentum=0.9)
-
     for epoch in range(num_epochs):
         epoch_loss = []
-
         h_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim).to(device)
         c_t = torch.zeros(model.num_layers, dataset.seq_len, model.hidden_dim).to(device)
         for x, y in dataloader:
             opt.zero_grad()
             y_pred, (h_t, c_t) = model(x, (h_t, c_t))
             loss = loss_fn(y_pred, y)
+
+            if writer:
+                writer.add_scalar("Loss", loss, epoch)
 
             h_t = h_t.detach()
             c_t = c_t.detach()
@@ -145,6 +146,7 @@ def train(dataset, model, num_epochs, loss_fn):
     plt.plot(np.linspace(1, num_epochs, num_epochs).astype(int), loss_vals)
     plt.title("Loss")
     plt.ticklabel_format(useOffset=False)
+    return sum(loss_vals)
 
 ##
 # Train and save an event based model
