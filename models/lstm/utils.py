@@ -11,10 +11,11 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
-import encode_midi as event_utils
+#import encode_midi as event_utils
 import music21 as m21
 from torch.utils.tensorboard import SummaryWriter
 
+'''
 # dataset as used by magenta, with veolcity removed
 class DatasetEventBased(torch.utils.data.Dataset):
     def __init__(self, file_paths, seq_len, device='cpu'):
@@ -56,7 +57,7 @@ class DatasetEventBased(torch.utils.data.Dataset):
         x = F.one_hot(torch.tensor(part[idx:idx+self.seq_len]), num_classes=356).float().to(self.device)
         y = F.one_hot(torch.tensor(part[idx+1:idx+self.seq_len+1]), num_classes=356).float().to(self.device)
         return (x, y)
-
+'''
 # normalize numbers between -1 and 1, for easier optimization
 def encode_norm(note):
     return [(note[0]-64)/64, (note[1]-8)/8]
@@ -66,10 +67,10 @@ def decode_norm(note):
 
 # Dataset as described in post 3
 class DatasetTupelBased(torch.utils.data.Dataset):
-    def __init__(self, file_path, seq_len, device='cpu'):
+    def __init__(self, dir_path, seq_len, device='cpu'):
         #self.data = np.load('data/tuple_based_big/data_big_100.npy', allow_pickle=True)
         #self.data = np.array(np.concatenate([np.load('data/tuple_based_big/data_big_'+str(i*100)+'.npy', allow_pickle=True) for i in range(1,3)]))
-        self.data = np.array(np.concatenate([np.load(file, allow_pickle=True) for file in os.listdir(file_path)]))
+        self.data = np.array(np.concatenate([np.load(dir_path+file, allow_pickle=True) for file in os.listdir(dir_path)]))
 
         self.seq_len = seq_len
         self.device = device
@@ -121,7 +122,7 @@ class LstmModel(nn.Module):
         pred = self.linear(output)
         return pred, state
 
-def train(dataset, model, num_epochs, loss_fn, opt=None, batch_size=128, writer=None, device='cpu'):
+def train(dataset, model, num_epochs, loss_fn, opt=None, batch_size=128, writer=None, device='cpu', save_dir='data/'):
     if not opt:
         opt = optim.SGD(model.parameters(), lr=0.005)
     model.train()
@@ -150,7 +151,7 @@ def train(dataset, model, num_epochs, loss_fn, opt=None, batch_size=128, writer=
     plt.plot(np.linspace(1, num_epochs, num_epochs).astype(int), loss_vals)
     plt.title("Loss")
     plt.ticklabel_format(useOffset=False)
-    plt.savefig('data/loss.png')
+    plt.savefig(save_dir+'loss.png')
     return sum(loss_vals)
 
 # Use model to generate sequance from a starting sequance
@@ -173,9 +174,11 @@ def to_stream_tup_based(seq):
         stream.append(note_m21)
     return stream
 
+'''
 def to_stream_event_based(seq):
     seq = [torch.argmax(oh).item() for oh in seq]
     tmp_mid = tempfile.NamedTemporaryFile(suffix='.mid')
     tmp_mid = 'twinkle_event.mid'
     event_utils.decode_midi(seq, tmp_mid)
     return m21.converter.parse(tmp_mid)
+'''
