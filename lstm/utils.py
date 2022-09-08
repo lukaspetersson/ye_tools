@@ -1,5 +1,6 @@
 
 import time
+import os
 import tempfile
 import numpy as np
 import glob
@@ -65,9 +66,10 @@ def decode_norm(note):
 
 # Dataset as described in post 3
 class DatasetTupelBased(torch.utils.data.Dataset):
-    def __init__(self, seq_len, device='cpu'):
+    def __init__(self, file_path, seq_len, device='cpu'):
         #self.data = np.load('data/tuple_based_big/data_big_100.npy', allow_pickle=True)
-        self.data = np.array(np.concatenate([np.load('data/tuple_based_big/data_big_'+str(i*100)+'.npy', allow_pickle=True) for i in range(1,3)]))
+        #self.data = np.array(np.concatenate([np.load('data/tuple_based_big/data_big_'+str(i*100)+'.npy', allow_pickle=True) for i in range(1,3)]))
+        self.data = np.array(np.concatenate([np.load(file, allow_pickle=True) for file in os.listdir(file_path)]))
 
         self.seq_len = seq_len
         self.device = device

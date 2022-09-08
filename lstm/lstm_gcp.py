@@ -15,7 +15,12 @@ from itertools import product
 from utils import DatasetTupelBased, DatasetEventBased, train, LstmModel
 
 torch.manual_seed(1)
-device = "cuda"
+
+cuda_availability = torch.cuda.is_available()
+if cuda_availability:
+  device = torch.device('cuda:{}'.format(torch.cuda.current_device()))
+else:
+  device = 'cpu'
 
 seq_len = 20
 batch_size = 64
@@ -23,7 +28,7 @@ lr = 0.001
 lstm_layers = 2
 lstm_hidden_dim = 20
 
-dataset = DatasetTupelBased(seq_len, device)
+dataset = DatasetTupelBased('data/tuple_based_big/test', seq_len, device)
 
 model = LstmModel(2, lstm_hidden_dim, lstm_layers).to(device)
 
