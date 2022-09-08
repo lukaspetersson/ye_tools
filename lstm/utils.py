@@ -14,11 +14,9 @@ import encode_midi as event_utils
 import music21 as m21
 from torch.utils.tensorboard import SummaryWriter
 
-device = 'cpu'
-
 # dataset as used by magenta, with veolcity removed
 class DatasetEventBased(torch.utils.data.Dataset):
-    def __init__(self, file_paths, seq_len):
+    def __init__(self, file_paths, seq_len, device='cpu'):
         def encode_one_song(fp):
             try:
                 return list(filter(lambda x: x<356, event_utils.encode_midi(fp)))
@@ -27,6 +25,7 @@ class DatasetEventBased(torch.utils.data.Dataset):
 
         self.data = [encode_one_song(file_path) for file_path in file_paths] 
         self.seq_len = seq_len 
+        self.device = device
 
     def data_in_part(self, part):
         return len(part) - (self.seq_len + 1)
@@ -53,8 +52,8 @@ class DatasetEventBased(torch.utils.data.Dataset):
                 break
             else:
                 idx -= num_datapoints
-        x = F.one_hot(torch.tensor(part[idx:idx+self.seq_len]), num_classes=356).float().to(device)
-        y = F.one_hot(torch.tensor(part[idx+1:idx+self.seq_len+1]), num_classes=356).float().to(device)
+        x = F.one_hot(torch.tensor(part[idx:idx+self.seq_len]), num_classes=356).float().to(self.device)
+        y = F.one_hot(torch.tensor(part[idx+1:idx+self.seq_len+1]), num_classes=356).float().to(self.device)
         return (x, y)
 
 # normalize numbers between -1 and 1, for easier optimization
@@ -66,11 +65,12 @@ def decode_norm(note):
 
 # Dataset as described in post 3
 class DatasetTupelBased(torch.utils.data.Dataset):
-    def __init__(self, seq_len):
+    def __init__(self, seq_len, device='cpu'):
         #self.data = np.load('data/tuple_based_big/data_big_100.npy', allow_pickle=True)
-        self.data = np.array(np.concatenate([np.load('data/tuple_based_big/data_big_'+str(i*100)+'.npy', allow_pickle=True) for i in range(1,5)]))
+        self.data = np.array(np.concatenate([np.load('data/tuple_based_big/data_big_'+str(i*100)+'.npy', allow_pickle=True) for i in range(1,3)]))
 
         self.seq_len = seq_len
+        self.device = device
 
     def data_in_part(self, part):
         return len(part) - (self.seq_len + 1)
@@ -98,8 +98,8 @@ class DatasetTupelBased(torch.utils.data.Dataset):
                 break
             else:
                 idx -= num_datapoints
-        x = torch.tensor([encode_norm(note) for note in part[idx:idx+self.seq_len]], dtype=torch.float32).to(device)
-        y = torch.tensor([encode_norm(note) for note in part[idx+1:idx+self.seq_len+1]], dtype=torch.float32).to(device)
+        x = torch.tensor([encode_norm(note) for note in part[idx:idx+self.seq_len]], dtype=torch.float32).to(self.device)
+        y = torch.tensor([encode_norm(note) for note in part[idx+1:idx+self.seq_len+1]], dtype=torch.float32).to(self.device)
         return (x, y)
 
 class LstmModel(nn.Module):
@@ -119,7 +119,7 @@ class LstmModel(nn.Module):
         pred = self.linear(output)
         return pred, state
 
-def train(dataset, model, num_epochs, loss_fn, opt=None, batch_size=128, writer=None):
+def train(dataset, model, num_epochs, loss_fn, opt=None, batch_size=128, writer=None, device='cpu'):
     if not opt:
         opt = optim.SGD(model.parameters(), lr=0.005)
     model.train()
@@ -152,7 +152,7 @@ def train(dataset, model, num_epochs, loss_fn, opt=None, batch_size=128, writer=
     return sum(loss_vals)
 
 # Use model to generate sequance from a starting sequance
-def generate(model, start, song_len, seq_len):
+def generate(model, start, song_len, seq_len, device='cpu'):
     model.eval()
     start_len = len(start)
     seq = torch.cat((start, torch.zeros(song_len-start_len, model.input_dim, dtype=torch.float))).to(device)
