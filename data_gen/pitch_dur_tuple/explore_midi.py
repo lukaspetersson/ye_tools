@@ -10,7 +10,7 @@ import random
 from scipy.stats import pearsonr, spearmanr
 
 ##
-score = m21.converter.parse("data/lmd_full/a/a00b0f5acc0fd4e4fc9f32830d61978d.mid")
+score = m21.converter.parse("~/ye_tools/datasets/maestro-v3.0.0/2006/MIDI-Unprocessed_01_R1_2006_01-09_ORIG_MID--AUDIO_01_R1_2006_04_Track04_wav.midi")
 
 ##
 # Test to filter out notes and display them
@@ -22,7 +22,7 @@ stream = m21.stream.Stream()
 for part in score.parts:
     s = m21.stream.Stream()
     for note in part.notesAndRests:
-        if include_note(note):
+        if include_note(note) or True:
             s.append(note)
     stream.append(s)
 
@@ -30,9 +30,10 @@ stream.show()
 #stream.write()
 
 ##
-# Dataset has 180k songs
+# Dataset has lmd has 180k songs
+# Maestro has 1276
 
-len(glob.glob("data/lmd_full/**/*.mid", recursive=True))
+len(glob.glob("/home/lukas/ye_tools/datasets/maestro-v3.0.0/**/*.midi", recursive=True))
 
 ##
 # Display what python objects are in the score
@@ -44,62 +45,80 @@ types
 
 ## 
 # analyze key signature
-
 # use analyze() even if it is slow, other strategy does not allways work
-t0 = time.time()
-#method 1
-k = score.analyze('key')
-print(time.time()-t0)
-t0 = time.time()
-#method 2
 
+#method 1
+t0 = time.time()
+k1 = score.analyze('key')
+print(time.time()-t0)
+
+#method 2
+t0 = time.time()
+k2 = None
 for el in score.flatten():
     if isinstance(el, m21.key.KeySignature):
-        print(el)
+        k2 = el
         break
 print(time.time()-t0)
-print(k, el)
+
+print(k1, k2)
 
 ##
+# Load 30 songs to do analysis on
+
+#lmd:
 # parse is SOMETIMES really slow (range: 0.1 - 60s)
-# key is faster than krumhansl
 # TODO: timeout ceirtain songs
+
+# maestro:
+# parse mean = 9s, max=20 (No need for filter) 
+# parsing should be 3h without parallel
+# key and krumhansl allways below 1s
+
+# second try with maestro:
+# mean = 0.8, cashe?
+
 # TODO: parallelize data analysis
+
 t_parse = []
-t_krum = []
-t_key= []
-for i, file in enumerate(glob.glob("data/lmd_full/0/**/*.mid", recursive=True)):
+scores = []
+for i, file in enumerate(glob.glob("/home/lukas/ye_tools/datasets/maestro-v3.0.0/**/*.midi", recursive=True)):
     if i > 30: break
 
     t0=time.time()
     s = m21.converter.parse(file)
     t_parse.append(time.time()-t0)
+    scores.append(s)
 
+print(t_parse)
+
+##
+
+# teqniques give different resutls
+# however, not relevant if we anyway transpose the song as data augmentation
+
+t_krum = []
+t_key= []
+for s in scores:
     t0=time.time()
-    s.analyze('Krumhansl')
+    k1 = s.analyze('Krumhansl')
     t_krum.append(time.time()-t0)
 
     t0=time.time()
-    s.analyze('key')
+    k2 = s.analyze('key')
     t_key.append(time.time()-t0)
 
-print(t_parse)
+    print(k1, k2)
+    print(k1 == k2)
+
 print(t_krum)
 print(t_key)
 
 ##
-# The 2 methods to get key signature dont produce same results
-
-for i, file in enumerate(glob.glob("data/adl-piano-midi/**/*.mid", recursive=True)):
-    if i > 5: break
-    s = m21.converter.parse(file)
-    #method 1
-    k = s.analyze('key')
-    #method 2
-    for el in s.recurse():
-        if isinstance(el, m21.key.Key):
-            print(el, k, file)
-    
+for s in scores:
+    for note in s.parts[0].flatten().notes:
+        print(note.duration.quarterLength)
+        break
 ##
 # investigate if most songs has acceptable durations
 # 1/2 has only acceptable, 1/4 has many 1/3 notes, 1/4 has a few >4 notes 
@@ -108,24 +127,48 @@ for i, file in enumerate(glob.glob("data/adl-piano-midi/**/*.mid", recursive=Tru
 tot_parts = 0
 useable_parts = 0
 
-acceptable_durations = set([i/4 for i in range(1, 17)])
-for i, file in enumerate(glob.glob("data/lmd_full/2/**/*.mid", recursive=True)):
-    if i > 30: break
-    s = m21.converter.parse(file)
-    for part in s.parts:
-        tot_parts += 1
-        c = 0
-        for note in part.notes:
-            if float(note.duration.quarterLength) not in acceptable_durations:
-                c += 1
-        if c < 20:
-            useable_parts += 1
+acceptable_durations = set([i/12 for i in range(12*4+1)])
+for s in scores:
+    #maestro
+    part = s.parts[0]
+    tot_parts += 1
+    c = 0
+    for note in s.parts[0].flatten().notes:
+        if float(note.duration.quarterLength) not in acceptable_durations:
+            c += 1
+    print(c)
+    if c < 20:
+        useable_parts += 1
+
+    #lmd
+    #for part in s.parts:
+     #   tot_parts += 1
+      #  c = 0
+       # for note in part.notes:
+        #    print(note.duration.quarterLength)
+         #   if float(note.duration.quarterLength) not in acceptable_durations:
+          #      c += 1
+        #if c < 20:
+         #   useable_parts += 1
 print(useable_parts, tot_parts)
 
 ##
+#If the value is an integer, the transposition is treated in half steps
+score = scores[0]
+print(score.parts[0].flatten().notes[0].pitch.midi)
+score = score.transpose(3)
+print(score.parts[0].flatten().notes[0].pitch.midi)
+
+##
+# it is not slower to transpose more, always 2-5s
+score = scores[0]
+for i in range(5):
+    t0=time.time()
+    score.transpose(i)
+    print(time.time()-t0)
+
+##
 # transpose to key C major or A minor
-# SUPER SLOW
-#TODO: solution, discard if not in C major or A minor?
 
 k = score.analyze('key')
 p = "C" if k.mode == "major" else "A"
@@ -138,9 +181,7 @@ print("Transformed from key:", k, "to:", score.analyze('key'))
 # Most are either multiple of 1/4 or 1/3
 
 durations = defaultdict(list)
-for i, file in enumerate(glob.glob("data/lmd_full/0/**/*.mid", recursive=True)):
-    if i > 5: break
-    s = m21.converter.parse(file)
+for s in scores:
     for el in s.recurse().notesAndRests:
         if isinstance(el, m21.note.Note):
             durations["note"].append(float(el.duration.quarterLength))
@@ -244,8 +285,9 @@ Other ways to encode the part, not in use
 class Song():
     def __init__(self, path, transpose=True):
         try:
-            with timeout(seconds=59):
-                self.score = m21.converter.parse(path)
+            #with timeout(seconds=59):
+             #   self.score = m21.converter.parse(path)
+            self.score = m21.converter.parse(path)
             if transpose:
                 #TODO: different parts have different keys, but they shouldnt
                 #TODO: too slow to transpose all songs
@@ -316,16 +358,41 @@ class Song():
         return [part.as_tuples() for i, part in enumerate(self.parts) if i not in self.excluded_parts]
 
 ##
-song = Song("data/lmd_full/3/3003bbf06bec7c8ff1add82b50a84ae4.mid", transpose=False)
+
+class MaestroSong():
+    def __init__(self, path, transpose=True):
+        try:
+            with timeout(seconds=59):
+                self.part = m21.converter.parse(path).parts[0]
+                self.notes = m21.stream.Stream([note for note in self.part.recurse().notesAndRests if isinstance(note, m21.note.Note)])
+        except Exception as e:
+            print("Error loading song", e)
+            self.notes = m21.stream.Stream([])
+    
+    def as_tuples(self):
+        vec = np.zeros((len(self.notes), 2), int)
+        for i, note in enumerate(self.notes):
+            dur = int(note.duration.quarterLength*12)
+            vec[i][0] = note.pitch.midi
+            vec[i][1] = dur
+        return [vec]
+
+    def show(self, fmt="musicxml", i=-1):
+        self.part.show(fmt)
+
+##
+song = MaestroSong("/home/lukas/ye_tools/datasets/maestro-v3.0.0/2008/MIDI-Unprocessed_01_R1_2008_01-04_ORIG_MID--AUDIO_01_R1_2008_wav--1.midi", transpose=False)
+
+##
 
 # filter notes with duration >4 and <0.25
 print(song.filter_notes(lambda note: not (0.25 <= float(note.duration.quarterLength) <= 4)))
 
-# filter out non 4ths
-print(song.filter_notes(lambda note:  float(note.duration.quarterLength) not in [i/4 for i in range(1, 17)]))
+# filter out non 12th durations
+print(song.filter_notes(lambda note:  float(note.duration.quarterLength) not in [i/12 for i in range(1, 12*4+1)]))
 
 # filter out instruments
-print(song.part_exclusion(lambda part: part.get_instrument_type() == m21.instrument.Sampler))
+#print(song.part_exclusion(lambda part: part.get_instrument_type() == m21.instrument.Sampler))
 
 # filter out parts with too much repetition
 print(song.part_exclusion(lambda part: np.std([int(note.pitch.midi) for note in part.notes]) < 5))
@@ -377,7 +444,7 @@ for i, file in enumerate(glob.glob("data/lmd_full/**/*.mid", recursive=True)):
 
 ##
 # Test loading dataset
-data = np.array(np.concatenate([np.load('data/data_big_'+str(i*100)+'.npy', allow_pickle=True) for i in range(1,45)]))
+data = np.array(np.concatenate([np.load('data/data_big_'+str(i*100)+'.npy', allow_pickle=True) for i in range(1,3)]))
 data = np.transpose(np.concatenate(data))
 print(len(data[0]))
 
@@ -392,6 +459,34 @@ plt.ylabel('Pitch')
 ##
 spearmanr(data[1], data[0])[0]
 
+
+##
+v = np.load('/home/lukas/ye_tools/data_gen/pitch_dur_tuple/output/tuple_based_big/data_big_100.npy', allow_pickle=True)
+
+##
+v
+
 ##
 twinkle = Song('../../Downloads/twinkle-twinkle-little-star.mid', transpose=False)
 np.save("data/twinkle_note_based.npy", np.asarray(twinkle.as_vector()), allow_pickle=True)
+
+##
+# 2h
+t0=time.time()
+files = glob.glob("/home/lukas/ye_tools/datasets/maestro-v3.0.0/**/*.midi", recursive=True)
+vecs = []
+for i, file in enumerate(files):
+    print(i)
+    if i%50 == 0:
+        print(i, time.time()-t0)
+    song = MaestroSong(file)
+    vecs+=song.as_tuples()
+print("Time:", time.time()-t0)
+
+##
+np.save("maestro_data.npy", np.array(vecs, dtype=object), allow_pickle=True)
+print("saved")
+
+## 
+v = np.load("/home/lukas/maestro_data.npy", allow_pickle=True)
+print("loaded")

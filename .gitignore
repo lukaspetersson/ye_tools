@@ -144,3 +144,4 @@ datasets
 data_gen/**/output
 models/**/saved_models
 models/**/runs
+models/transformer/music_transformer/

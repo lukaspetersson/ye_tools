@@ -10,7 +10,6 @@ import torch.nn as nn
 import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 import torch.nn.functional as F
-import encode_midi as event_utils
 import music21 as m21
 from torch.utils.tensorboard import SummaryWriter
 from utils import * 
