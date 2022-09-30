@@ -60,17 +60,19 @@ class DatasetEventBased(torch.utils.data.Dataset):
 '''
 # normalize numbers between -1 and 1, for easier optimization
 def encode_norm(note):
-    return [(note[0]-64)/64, (note[1]-8)/8]
+    return [note[0]/128, note[1]/48]
 
 def decode_norm(note):
-    return [round((note[0]*64)+64), round((note[1]*8)+8)]
+    return [round(note[0]*128), round(note[1]*48)]
 
 # Dataset as described in post 3
 class DatasetTupelBased(torch.utils.data.Dataset):
-    def __init__(self, dir_path, seq_len, device='cpu'):
+    def __init__(self, file_path, seq_len, device='cpu'):
         #self.data = np.load('data/tuple_based_big/data_big_100.npy', allow_pickle=True)
         #self.data = np.array(np.concatenate([np.load('data/tuple_based_big/data_big_'+str(i*100)+'.npy', allow_pickle=True) for i in range(1,3)]))
-        self.data = np.array(np.concatenate([np.load(dir_path+file, allow_pickle=True) for file in os.listdir(dir_path)]))
+        #self.data = np.array(np.concatenate([np.load(dir_path+file, allow_pickle=True) for file in os.listdir(dir_path)]))
+        
+        self.data = np.load(file_path, allow_pickle=True)[:60]
 
         self.seq_len = seq_len
         self.device = device
@@ -155,9 +157,12 @@ def train(dataset, model, num_epochs, loss_fn, opt=None, batch_size=128, writer=
     return sum(loss_vals)
 
 # Use model to generate sequance from a starting sequance
-def generate(model, start, song_len, seq_len, device='cpu'):
+def generate(model, start, seq_len, device='cpu'):
+    start = start[0][:seq_len]
+    start = torch.tensor([encode_norm(note) for note in start], dtype=torch.float)
     model.eval()
-    start_len = len(start)
+    start_len = seq_len
+    song_len = seq_len*2
     seq = torch.cat((start, torch.zeros(song_len-start_len, model.input_dim, dtype=torch.float))).to(device)
     h_t = torch.zeros(model.num_layers, seq_len, model.hidden_dim).to(device)
     c_t = torch.zeros(model.num_layers, seq_len, model.hidden_dim).to(device)
@@ -165,12 +170,13 @@ def generate(model, start, song_len, seq_len, device='cpu'):
         x = torch.unsqueeze(seq[i-seq_len:i], dim=0)
         y, (h_t, c_t) = model(x, (h_t, c_t))
         seq[i] = y[0][-1]
-    return seq
+    return seq.detach().numpy()
 
 def to_stream_tup_based(seq):
     stream = m21.stream.Stream()
     for note in seq:
-        note_m21 = m21.note.Note(pitch=decode_norm(note[0].item()), duration=m21.duration.Duration(decode_norm(note[1].item()/4)))
+        note = decode_norm(note)
+        note_m21 = m21.note.Note(pitch=note[0], duration=m21.duration.Duration(note[1]/4))
         stream.append(note_m21)
     return stream
 

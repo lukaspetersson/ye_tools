@@ -14,6 +14,7 @@ import music21 as m21
 from torch.utils.tensorboard import SummaryWriter
 from utils import * 
 
+##
 torch.manual_seed(1)
 device = "cpu"
 SEQ_LEN = 25
@@ -30,9 +31,10 @@ torch.save(model_event.state_dict(), 'models/event_small.pth')
 ##
 # Train and save a tuple based model
 model_tup = LstmModel(input_dim=2).to(device)
-dataset_tup = DatasetTupelBased(SEQ_LEN)
-train(dataset_tup, model_tup, 3, nn.MSELoss())
-torch.save(model_tup.state_dict(), 'models/tup_small.pth')
+dataset_tup = DatasetTupelBased("../../data_gen/pitch_dur_tuple/output/maestro_data.npy", SEQ_LEN)
+train(dataset_tup, model_tup, 2, nn.MSELoss())
+torch.save(model_tup.state_dict(), 'models/maestro_small.pth')
+print("done")
 
 ##
 # Test a forward pass of event based model
@@ -61,10 +63,20 @@ model_tup = LstmModel(input_dim=2).to(device)
 model_tup.load_state_dict(torch.load('models/gcp/test.pth'))
 
 ##
-start = torch.tensor(np.load('data/twinkle_note_based.npy', allow_pickle=True)[0][:SEQ_LEN], dtype=torch.float)
-seq = generate(model_tup, start, len(start)*2, SEQ_LEN)
+start = np.load('../../data_gen/pitch_dur_tuple/output/twinkle_note_based.npy', allow_pickle=True)
+seq = generate(model=model_tup, start=start, seq_len=SEQ_LEN)
 stream = to_stream_tup_based(seq)
 stream.write('midi', fp='test.midi')
+##
+model_tup.eval()
+h_t = torch.zeros(model_tup.num_layers, SEQ_LEN, model_tup.hidden_dim).to(device)
+c_t = torch.zeros(model_tup.num_layers, SEQ_LEN, model_tup.hidden_dim).to(device)
+x = start[0][:SEQ_LEN]
+x = torch.tensor([encode_norm(note) for note in x], dtype=torch.float)
+x = torch.unsqueeze(x, dim=0)
+y, (h_t, c_t) = model_tup(x, (h_t, c_t))
+print(x)
+print(y)
 
 ##
 start = [375, 60, 371, 52, 372, 48, 315, 188, 258, 376, 60, 312, 180, 176, 258, 188, 258, 378, 67, 375, 60, 373, 48, 315, 195, 258, 377, 67, 312, 188, 176, 258, 195, 258, 377, 69, 374, 60, 372, 41, 315, 197, 258, 376, 69, 312, 188, 169, 258, 197, 258, 376, 67, 374, 60, 373, 48, 355, 275, 195, 188, 176, 261, 376, 65, 373, 57, 373, 41, 315, 193, 258, 377, 65, 312, 185, 169, 258, 193, 258, 376, 64, 373, 55, 375, 48, 315, 192, 258, 377, 64, 312, 183, 176, 258, 192, 258, 376, 62, 373, 55, 373, 43, 315, 190, 258, 376, 62, 312, 183, 171, 258, 190, 258, 376, 60, 373, 52, 374, 48, 355, 275, 188, 180, 176, 261, 379, 67, 376, 60, 374, 48, 315, 195, 258, 376, 67, 312, 188, 176, 258, 195, 258, 376, 65, 373, 57, 373, 41, 315, 193, 258, 377, 65, 312, 185, 169, 258, 193, 258, 376]

@@ -4,6 +4,7 @@ from torch.utils.data import DataLoader
 import os
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 torch.manual_seed(1)
 
@@ -13,26 +14,23 @@ if cuda_availability:
 else:
   device = 'cpu'
 
-seq_len = 20
+seq_len = 25
 batch_size = 64
 lr = 0.001
-lstm_layers = 2
-lstm_hidden_dim = 20
+lstm_layers = 3
+lstm_hidden_dim = 512
 
-bucket_path = '/gcs/lstm_ye/'
+bucket_path = '/gcs/lstm_maestro/'
 
 
-# normalize numbers between -1 and 1, for easier optimization
-def encode_norm(note):
-    return [(note[0]-64)/64, (note[1]-8)/8]
-
-def decode_norm(note):
-    return [round((note[0]*64)+64), round((note[1]*8)+8)]
+def encode_norm(note, transpose):
+    return [(note[0]+transpose)/128, note[1]/48]
 
 # Dataset as described in post 3
 class DatasetTupelBased(torch.utils.data.Dataset):
     def __init__(self, dir_path, seq_len, device='cpu'):
-        self.data = np.array(np.concatenate([np.load(dir_path+file, allow_pickle=True) for file in os.listdir(dir_path)]))
+        #self.data = np.array(np.concatenate([np.load(dir_path+file, allow_pickle=True) for file in os.listdir(dir_path)]))
+        self.data = np.load(dir_path, allow_pickle=True)
 
         self.seq_len = seq_len
         self.device = device
@@ -63,8 +61,9 @@ class DatasetTupelBased(torch.utils.data.Dataset):
                 break
             else:
                 idx -= num_datapoints
-        x = torch.tensor([encode_norm(note) for note in part[idx:idx+self.seq_len]], dtype=torch.float32).to(self.device)
-        y = torch.tensor([encode_norm(note) for note in part[idx+1:idx+self.seq_len+1]], dtype=torch.float32).to(self.device)
+        transpose = random.randint(-2, 2)
+        x = torch.tensor([encode_norm(note, transpose) for note in part[idx:idx+self.seq_len]], dtype=torch.float32).to(self.device)
+        y = torch.tensor([encode_norm(note, transpose) for note in part[idx+1:idx+self.seq_len+1]], dtype=torch.float32).to(self.device)
         return (x, y)
 
 class LstmModel(nn.Module):
@@ -109,19 +108,21 @@ def train(dataset, model, num_epochs, loss_fn, opt, batch_size, writer=None, dev
             loss.backward()
             opt.step()
             epoch_loss.append(loss.item())
+            print("Epoch loss:", epoch_loss)
         loss_vals.append(sum(epoch_loss)/len(epoch_loss))
+        torch.save(model.state_dict(), bucket_path+'models/big_ckp'+str(epoch)+'.pth')
     plt.plot(np.linspace(1, num_epochs, num_epochs).astype(int), loss_vals)
     plt.title("Loss")
     plt.ticklabel_format(useOffset=False)
-    plt.savefig(save_dir+'loss.png')
+    plt.savefig(save_dir+'loss_big.png')
     return sum(loss_vals)
 
 def main():
-    dataset = DatasetTupelBased(bucket_path+'test_data/', seq_len, device)
+    dataset = DatasetTupelBased(bucket_path+'test_data/maestro_data.npy', seq_len, device)
     model = LstmModel(2, lstm_hidden_dim, lstm_layers).to(device)
     opt = optim.SGD(model.parameters(), lr=lr, momentum=0.9)
-    total_loss = train(dataset, model, 2, nn.MSELoss(), opt, batch_size, device=device, save_dir=bucket_path+'img/')
-    torch.save(model.state_dict(), bucket_path+'models/test.pth')
+    total_loss = train(dataset, model, 15, nn.MSELoss(), opt, batch_size, device=device, save_dir=bucket_path+'img/')
+    torch.save(model.state_dict(), bucket_path+'models/big.pth')
 
 if __name__ == '__main__':
     main()
