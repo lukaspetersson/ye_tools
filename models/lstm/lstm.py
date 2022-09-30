@@ -59,14 +59,23 @@ writer.add_graph(model_tup, (x, (h_t, c_t)))
 y_pred[0][-1]
 
 ##
-model_tup = LstmModel(input_dim=2).to(device)
-model_tup.load_state_dict(torch.load('models/gcp/test.pth'))
+model_tup = LstmModel(input_dim=2, hidden_dim=512, num_layers=3).to(device)
+model_tup.load_state_dict(torch.load('/home/lukas/Downloads/models_big_ckp9.pth', map_location=torch.device("cpu")))
+
+##
+#show continuation of a random start
+start = np.array([[[random.randint(55, 75), 2*random.randint(1, 4)] for _ in range(SEQ_LEN)]])
+seq = generate(model=model_tup, start=start, seq_len=SEQ_LEN)
+stream = to_stream_tup_based(seq)
+stream.show()
 
 ##
 start = np.load('../../data_gen/pitch_dur_tuple/output/twinkle_note_based.npy', allow_pickle=True)
 seq = generate(model=model_tup, start=start, seq_len=SEQ_LEN)
 stream = to_stream_tup_based(seq)
-stream.write('midi', fp='test.midi')
+stream.show()
+#stream.write('midi', fp='test.midi')
+
 ##
 model_tup.eval()
 h_t = torch.zeros(model_tup.num_layers, SEQ_LEN, model_tup.hidden_dim).to(device)
